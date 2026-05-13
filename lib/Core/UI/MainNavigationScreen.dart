@@ -3,6 +3,7 @@ import 'package:aves_app/main.dart';
 import 'package:aves_app/Presentation/UI/IdentificarAveScreen.dart';
 import 'package:aves_app/Presentation/UI/InicioScreen.dart';
 import 'package:aves_app/Presentation/UI/MapaAvistamientosScreen.dart';
+import 'package:aves_app/Presentation/UI/CatalogoScreen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -18,6 +19,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const InicioScreen(),
     const IdentificarAveScreen(),
     const MapaAvistamientosScreen(),
+    const CatalogoScreen(),
   ];
 
   @override
@@ -51,6 +53,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   style: TextStyle(
                     color: themeColors.onPrimaryContainer,
                     fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
               ),
@@ -69,6 +72,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               leading: Icon(Icons.map, color: themeColors.primary),
               title: const Text('Mapa de Avistamientos'),
               onTap: () { setState(() => _selectedIndex = 2); Navigator.pop(context); },
+            ),
+            ListTile(
+              leading: Icon(Icons.menu_book_rounded, color: themeColors.primary),
+              title: const Text('Catálogo de Especies'),
+              onTap: () { setState(() => _selectedIndex = 3); Navigator.pop(context); },
             ),
             const Spacer(),
             const Divider(indent: 20, endIndent: 20),
