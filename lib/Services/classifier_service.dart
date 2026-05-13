@@ -6,21 +6,22 @@ class BirdClassifier {
   late Interpreter _interpreter;
 
   static const List<String> labels = [
-    'Aguililla Cola Corta',
-    'Chimachimá',
-    'Chipe Peregrino',
-    'Chipe Tropical',
-    'Garza Nocturna Corona Negra',
-    'Paloma Doméstica',
-    'Papamoscas Verdoso',
-    'Picogordo Degollado',
-    'Sangretoro Encendido',
-    'Titira Puerquito',
-    'Trepatroncos Montano',
-    'Trepatroncos Pardo',
-    'Vencejo Collar Blanco',
-    'Vireo Verdeamarillo',
-    'Zopilote Aura',
+    'Avefría teroCSV',
+    'Baltimore Oriole',
+    'Bienteveo Común',
+    'Canario coronado',
+    'Colibrí Cola Canela',
+    'Fiofío Silbón',
+    'Garza dedos dorados',
+    'Jacana',
+    'Luis Pico Grueso',
+    'Papamoscas rayado chico',
+    'Saltador Gris',
+    'Saltador garganta ocre',
+    'Tangara Azulgris',
+    'Torcaza Colorada',
+    'Vireo Ojos Rojos',
+    'Zorzal sabia',
   ];
 
   Future<void> loadModel() async {
@@ -33,32 +34,31 @@ class BirdClassifier {
   }
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
-    // 1. Decodificar y redimensionar a 224x224
+    // 1. Decodificar y redimensionar a 380x380 (EfficientNet-B4)
     final rawImage = img.decodeImage(await imageFile.readAsBytes())!;
-    final resized = img.copyResize(rawImage, width: 224, height: 224);
+    final resized = img.copyResize(rawImage, width: 380, height: 380);
 
-    // 2. Normalizar a [0.0, 1.0] con forma [1, 224, 224, 3]
+    // 2. Normalizar a [0.0, 1.0] con forma [1, 380, 380, 3]
     final input = List.generate(
       1,
       (_) => List.generate(
-        224,
-        (y) => List.generate(224, (x) {
+        380,
+        (y) => List.generate(380, (x) {
           final pixel = resized.getPixel(x, y);
           return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
         }),
       ),
     );
 
-    // 3. Output con el número correcto de clases
+    // 3. Output: 16 clases
     final output = List.filled(labels.length, 0.0).reshape([1, labels.length]);
 
     _interpreter.run(input, output);
 
-    // 4. Obtener top resultado
+    // 4. Top resultado
     final scores = List<double>.from(output[0] as List);
     final maxIdx = scores.indexOf(scores.reduce((a, b) => a > b ? a : b));
 
-    // 5. Retornar nombre + confianza
     return {
       'label': labels[maxIdx],
       'confidence': scores[maxIdx],
