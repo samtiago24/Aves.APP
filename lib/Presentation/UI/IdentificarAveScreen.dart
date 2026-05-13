@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 // Asegúrate de que esta ruta sea la correcta donde guardaste tu BirdClassifier
-import 'package:aves_app/services/classifier_service.dart';
+import 'package:aves_app/Services/classifier_service.dart';
 
 class IdentificarAveScreen extends StatefulWidget {
   const IdentificarAveScreen({super.key});
