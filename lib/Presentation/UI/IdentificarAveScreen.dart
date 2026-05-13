@@ -55,9 +55,9 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al clasificar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al clasificar: $e')));
     }
   }
 
@@ -99,9 +99,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 5)
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
                 ),
                 child: Column(
                   children: [
@@ -132,7 +130,9 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
-                  onPressed: _isLoading ? null : () => _pickImage(ImageSource.camera),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _pickImage(ImageSource.camera),
                   icon: const Icon(Icons.camera_alt),
                   label: const Text('CÁMARA'),
                   style: ElevatedButton.styleFrom(
@@ -141,7 +141,9 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _isLoading ? null : () => _pickImage(ImageSource.gallery),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _pickImage(ImageSource.gallery),
                   icon: const Icon(Icons.photo_library),
                   label: const Text('GALERÍA'),
                   style: ElevatedButton.styleFrom(
