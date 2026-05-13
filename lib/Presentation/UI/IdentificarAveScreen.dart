@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:aves_app/Services/classifier_service.dart';
 import 'package:aves_app/Services/database_service.dart';
 import 'package:aves_app/Services/location_service.dart';
+import 'package:aves_app/Presentation/UI/DistribucionAveScreen.dart';
 
 class IdentificarAveScreen extends StatefulWidget {
   const IdentificarAveScreen({super.key});
@@ -21,7 +22,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   bool _isSaving = false;
   bool _noEsAve = false;
 
-  // Umbral mínimo de confianza para considerar que es un ave válida
   static const double _umbralConfianza = 0.60;
 
   @override
@@ -48,7 +48,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
       maxWidth: 380,
       maxHeight: 380,
       imageQuality: 90,
-      // Cámara trasera por defecto cuando la fuente es la cámara
       preferredCameraDevice: CameraDevice.rear,
     );
     if (pickedFile != null) {
@@ -69,19 +68,10 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
       final top3 = result['top3'] as List<Map<String, dynamic>>;
       final topConfianza = top3.first['confidence'] as double;
 
-      // Si la confianza máxima es menor al umbral, no es un ave reconocida
       if (topConfianza < _umbralConfianza) {
-        setState(() {
-          _result = null;
-          _noEsAve = true;
-          _isLoading = false;
-        });
+        setState(() { _result = null; _noEsAve = true; _isLoading = false; });
       } else {
-        setState(() {
-          _result = result;
-          _noEsAve = false;
-          _isLoading = false;
-        });
+        setState(() { _result = result; _noEsAve = false; _isLoading = false; });
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -117,6 +107,20 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
       setState(() => _isSaving = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
     }
+  }
+
+  void _verDistribucion() {
+    if (_result == null) return;
+    final top3 = _result!['top3'] as List<Map<String, dynamic>>;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DistribucionAveScreen(
+          especie: top3.first['label'].toString(),
+          confianza: top3.first['confidence'] as double,
+        ),
+      ),
+    );
   }
 
   @override
@@ -183,7 +187,19 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
               ],
             ),
             if (_result != null && !_noEsAve) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              // Boton Ver distribucion en mapa
+              ElevatedButton.icon(
+                onPressed: _verDistribucion,
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('VER D\u00d3NDE ENCONTRARLA'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1565C0),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 10),
               ElevatedButton.icon(
                 onPressed: (_isSaving || _isLoading) ? null : _guardarAvistamiento,
                 icon: _isSaving
@@ -216,13 +232,11 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
         children: [
           Icon(Icons.do_not_disturb_alt_rounded, color: Colors.red.shade400, size: 52),
           const SizedBox(height: 10),
-          Text(
-            'No se detectó un ave',
-            style: TextStyle(color: Colors.red.shade700, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          Text('No se detect\u00f3 un ave',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text(
-            'La imagen no corresponde a ninguna de las 16 especies reconocidas.\nIntenta con una foto más clara o desde otro ángulo.',
+            'La imagen no corresponde a ninguna de las 16 especies reconocidas.\nIntenta con una foto m\u00e1s clara o desde otro \u00e1ngulo.',
             style: TextStyle(color: Colors.red.shade600, fontSize: 13),
             textAlign: TextAlign.center,
           ),
