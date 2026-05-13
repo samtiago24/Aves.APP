@@ -3,7 +3,8 @@ import 'package:image/image.dart' as img;
 import 'dart:io';
 
 class BirdClassifier {
-  late Interpreter _interpreter;
+  Interpreter? _interpreter;
+  bool _isLoaded = false;
 
   static const List<String> labels = [
     'Avefría teroCSV',
@@ -25,20 +26,27 @@ class BirdClassifier {
   ];
 
   Future<void> loadModel() async {
-    _interpreter = await Interpreter.fromAsset(
-      'assets/models/model_aves.tflite',
-    );
-    print(
-      '✓ Modelo cargado. Input shape: ${_interpreter.getInputTensor(0).shape}',
-    );
+    try {
+      _interpreter = await Interpreter.fromAsset(
+        'assets/models/model_aves.tflite',
+      );
+      _isLoaded = true;
+      print('\u2713 Modelo cargado. Input shape: ${_interpreter!.getInputTensor(0).shape}');
+    } catch (e) {
+      _isLoaded = false;
+      print('\u2717 Error cargando modelo: $e');
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
-    // 1. Decodificar y redimensionar a 380x380 (EfficientNet-B4)
+    if (!_isLoaded || _interpreter == null) {
+      throw Exception('El modelo no está cargado. Llama loadModel() primero.');
+    }
+
     final rawImage = img.decodeImage(await imageFile.readAsBytes())!;
     final resized = img.copyResize(rawImage, width: 380, height: 380);
 
-    // 2. Normalizar a [0.0, 1.0] con forma [1, 380, 380, 3]
     final input = List.generate(
       1,
       (_) => List.generate(
@@ -50,12 +58,9 @@ class BirdClassifier {
       ),
     );
 
-    // 3. Output: 16 clases
     final output = List.filled(labels.length, 0.0).reshape([1, labels.length]);
+    _interpreter!.run(input, output);
 
-    _interpreter.run(input, output);
-
-    // 4. Top resultado
     final scores = List<double>.from(output[0] as List);
     final maxIdx = scores.indexOf(scores.reduce((a, b) => a > b ? a : b));
 
@@ -67,5 +72,5 @@ class BirdClassifier {
     };
   }
 
-  void dispose() => _interpreter.close();
+  void dispose() => _interpreter?.close();
 }
