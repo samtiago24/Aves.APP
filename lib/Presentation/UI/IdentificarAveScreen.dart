@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-// Asegúrate de que esta ruta sea la correcta donde guardaste tu BirdClassifier
 import 'package:aves_app/Services/classifier_service.dart';
 
 class IdentificarAveScreen extends StatefulWidget {
@@ -14,10 +13,9 @@ class IdentificarAveScreen extends StatefulWidget {
 class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   File? _image;
   final _picker = ImagePicker();
-
-  // CORRECCIÓN: Usar el nombre de la clase que definiste: BirdClassifier
   final _classifier = BirdClassifier();
   Map<String, dynamic>? _result;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -25,47 +23,52 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     _loadModel();
   }
 
-  // RNF02: Carga el modelo al inicio para que la respuesta sea < 2s [cite: 20]
   Future<void> _loadModel() async {
     await _classifier.loadModel();
   }
 
-  // RF01: Captura de imagen desde cámara o galería [cite: 4]
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await _picker.pickImage(
       source: source,
-      maxWidth: 224, // Optimizado para el tamaño de entrada de tu modelo
-      maxHeight: 224,
-      imageQuality: 80, // RNF07: Optimización de almacenamiento
+      maxWidth: 380,
+      maxHeight: 380,
+      imageQuality: 90,
     );
 
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
+        _result = null;
       });
       _runInference();
     }
   }
 
-  // RF02: Ejecutar el modelo localmente
   Future<void> _runInference() async {
-    if (_image != null) {
+    if (_image == null) return;
+    setState(() => _isLoading = true);
+    try {
       final result = await _classifier.classify(_image!);
       setState(() {
         _result = result;
+        _isLoading = false;
       });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al clasificar: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // RNF04: Colores Institucionales UCC [cite: 23]
     final primaryGreen = const Color(0xFF80BA27);
     final darkBlue = const Color(0xFF2C3E50);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("IDENTIFICAR AVE"),
+        title: const Text('IDENTIFICAR AVE'),
         backgroundColor: darkBlue,
         foregroundColor: Colors.white,
       ),
@@ -73,7 +76,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // RF03: Validación Visual - Mostrar la foto capturada [cite: 6]
             if (_image != null)
               Center(child: Image.file(_image!, height: 250))
             else
@@ -81,22 +83,33 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 padding: EdgeInsets.all(20.0),
                 child: Icon(Icons.image_search, size: 100, color: Colors.grey),
               ),
-
-            if (_result != null)
+            const SizedBox(height: 16),
+            if (_isLoading)
+              Column(
+                children: [
+                  CircularProgressIndicator(color: primaryGreen),
+                  const SizedBox(height: 8),
+                  const Text('Analizando imagen...'),
+                ],
+              )
+            else if (_result != null)
               Container(
                 margin: const EdgeInsets.all(20),
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+                  boxShadow: [
+                    BoxShadow(color: Colors.black12, blurRadius: 5)
+                  ],
                 ),
                 child: Column(
                   children: [
                     Text(
-                      "Especie Detectada:",
+                      'Especie Detectada:',
                       style: TextStyle(color: darkBlue, fontSize: 16),
                     ),
+                    const SizedBox(height: 8),
                     Text(
                       _result!['label'].toString().toUpperCase(),
                       style: TextStyle(
@@ -104,29 +117,33 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                    Text("Confianza: ${_result!['confidenceText']}"),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Confianza: ${_result!["confidenceText"]}',
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ],
                 ),
               ),
-
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.camera),
+                  onPressed: _isLoading ? null : () => _pickImage(ImageSource.camera),
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text("CÁMARA"),
+                  label: const Text('CÁMARA'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryGreen,
                     foregroundColor: Colors.white,
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.gallery),
+                  onPressed: _isLoading ? null : () => _pickImage(ImageSource.gallery),
                   icon: const Icon(Icons.photo_library),
-                  label: const Text("GALERÍA"),
+                  label: const Text('GALERÍA'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: darkBlue,
                     foregroundColor: Colors.white,
@@ -134,6 +151,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
