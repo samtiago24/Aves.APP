@@ -25,18 +25,35 @@ class BirdClassifier {
     'Zorzal sabia',
   ];
 
+  static const Map<String, String> referenceImages = {
+    'Avefría teroCSV': 'lib/assets/images/avefria_terocsv.jpg',
+    'Baltimore Oriole': 'lib/assets/images/baltimore_oriole.jpg',
+    'Bienteveo Común': 'lib/assets/images/bienteveo_comun.jpg',
+    'Canario coronado': 'lib/assets/images/canario_coronado.jpg',
+    'Colibrí Cola Canela': 'lib/assets/images/colibri_cola_canela.jpg',
+    'Fiofío Silbón': 'lib/assets/images/fiofio_silbon.jpg',
+    'Garza dedos dorados': 'lib/assets/images/garza_dedos_dorados.jpg',
+    'Jacana': 'lib/assets/images/jacana.jpg',
+    'Luis Pico Grueso': 'lib/assets/images/luis_pico_grueso.jpg',
+    'Papamoscas rayado chico': 'lib/assets/images/papamoscas_rayado_chico.jpg',
+    'Saltador Gris': 'lib/assets/images/saltador_gris.jpg',
+    'Saltador garganta ocre': 'lib/assets/images/saltador_garganta_ocre.jpg',
+    'Tangara Azulgris': 'lib/assets/images/tangara_azulgris.jpg',
+    'Torcaza Colorada': 'lib/assets/images/torcaza_colorada.jpg',
+    'Vireo Ojos Rojos': 'lib/assets/images/vireo_ojos_rojos.jpg',
+    'Zorzal sabia': 'lib/assets/images/zorzal_sabia.jpg',
+  };
+
   Future<void> loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset(
-        'lib/assets/models/model_aves.tflite', // ← ruta corregida
+        'lib/assets/models/model_aves.tflite',
       );
       _isLoaded = true;
-      print(
-        '✓ Modelo cargado. Input shape: ${_interpreter!.getInputTensor(0).shape}',
-      );
+      print('\u2713 Modelo cargado. Input shape: ${_interpreter!.getInputTensor(0).shape}');
     } catch (e) {
       _isLoaded = false;
-      print('✗ Error cargando modelo: $e');
+      print('\u2717 Error cargando modelo: $e');
       rethrow;
     }
   }
@@ -64,12 +81,26 @@ class BirdClassifier {
     _interpreter!.run(input, output);
 
     final scores = List<double>.from(output[0] as List);
-    final maxIdx = scores.indexOf(scores.reduce((a, b) => a > b ? a : b));
+    final indexed = List.generate(scores.length, (i) => i);
+    indexed.sort((a, b) => scores[b].compareTo(scores[a]));
+
+    final topIdx = indexed[0];
+    final topLabel = labels[topIdx];
+
+    // RF04: Top 3 especies
+    final top3 = indexed.take(3).map((i) => {
+      'label': labels[i],
+      'confidence': scores[i],
+      'confidenceText': '${(scores[i] * 100).toStringAsFixed(1)}%',
+      'referenceImage': referenceImages[labels[i]] ?? '',
+    }).toList();
 
     return {
-      'label': labels[maxIdx],
-      'confidence': scores[maxIdx],
-      'confidenceText': '${(scores[maxIdx] * 100).toStringAsFixed(1)}%',
+      'label': topLabel,
+      'confidence': scores[topIdx],
+      'confidenceText': '${(scores[topIdx] * 100).toStringAsFixed(1)}%',
+      'referenceImage': referenceImages[topLabel] ?? '', // RF03
+      'top3': top3,
       'allScores': scores,
     };
   }
