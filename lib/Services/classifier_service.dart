@@ -28,13 +28,15 @@ class BirdClassifier {
   Future<void> loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset(
-        'assets/models/model_aves.tflite',
+        'lib/assets/models/model_aves.tflite', // ← ruta corregida
       );
       _isLoaded = true;
-      print('\u2713 Modelo cargado. Input shape: ${_interpreter!.getInputTensor(0).shape}');
+      print(
+        '✓ Modelo cargado. Input shape: ${_interpreter!.getInputTensor(0).shape}',
+      );
     } catch (e) {
       _isLoaded = false;
-      print('\u2717 Error cargando modelo: $e');
+      print('✗ Error cargando modelo: $e');
       rethrow;
     }
   }

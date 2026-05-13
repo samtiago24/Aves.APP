@@ -24,7 +24,19 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   }
 
   Future<void> _loadModel() async {
-    await _classifier.loadModel();
+    try {
+      await _classifier.loadModel();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando modelo: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
