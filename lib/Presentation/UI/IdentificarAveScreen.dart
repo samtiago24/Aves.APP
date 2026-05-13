@@ -19,6 +19,10 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   Map<String, dynamic>? _result;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _noEsAve = false;
+
+  // Umbral mínimo de confianza para considerar que es un ave válida
+  static const double _umbralConfianza = 0.60;
 
   @override
   void initState() {
@@ -40,10 +44,19 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await _picker.pickImage(
-      source: source, maxWidth: 380, maxHeight: 380, imageQuality: 90,
+      source: source,
+      maxWidth: 380,
+      maxHeight: 380,
+      imageQuality: 90,
+      // Cámara trasera por defecto cuando la fuente es la cámara
+      preferredCameraDevice: CameraDevice.rear,
     );
     if (pickedFile != null) {
-      setState(() { _image = File(pickedFile.path); _result = null; });
+      setState(() {
+        _image = File(pickedFile.path);
+        _result = null;
+        _noEsAve = false;
+      });
       _runInference();
     }
   }
@@ -53,14 +66,29 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     setState(() => _isLoading = true);
     try {
       final result = await _classifier.classify(_image!);
-      setState(() { _result = result; _isLoading = false; });
+      final top3 = result['top3'] as List<Map<String, dynamic>>;
+      final topConfianza = top3.first['confidence'] as double;
+
+      // Si la confianza máxima es menor al umbral, no es un ave reconocida
+      if (topConfianza < _umbralConfianza) {
+        setState(() {
+          _result = null;
+          _noEsAve = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _result = result;
+          _noEsAve = false;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
-  // RF05 + RF08: Guardar con GPS
   Future<void> _guardarAvistamiento() async {
     if (_result == null || _image == null) return;
     setState(() => _isSaving = true);
@@ -124,6 +152,8 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 const SizedBox(height: 8),
                 const Text('Analizando imagen...', textAlign: TextAlign.center),
               ])
+            else if (_noEsAve)
+              _buildNoEsAveCard()
             else if (_result != null)
               ..._buildResults(primaryGreen, darkBlue),
             const SizedBox(height: 16),
@@ -133,18 +163,26 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                   onPressed: _isLoading ? null : () => _pickImage(ImageSource.camera),
                   icon: const Icon(Icons.camera_alt),
                   label: const Text('C\u00c1MARA'),
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: ElevatedButton.icon(
                   onPressed: _isLoading ? null : () => _pickImage(ImageSource.gallery),
                   icon: const Icon(Icons.photo_library),
                   label: const Text('GALER\u00cdA'),
-                  style: ElevatedButton.styleFrom(backgroundColor: darkBlue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: darkBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 )),
               ],
             ),
-            if (_result != null) ...[
+            if (_result != null && !_noEsAve) ...[
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: (_isSaving || _isLoading) ? null : _guardarAvistamiento,
@@ -162,6 +200,33 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNoEsAveCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade300),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.do_not_disturb_alt_rounded, color: Colors.red.shade400, size: 52),
+          const SizedBox(height: 10),
+          Text(
+            'No se detectó un ave',
+            style: TextStyle(color: Colors.red.shade700, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'La imagen no corresponde a ninguna de las 16 especies reconocidas.\nIntenta con una foto más clara o desde otro ángulo.',
+            style: TextStyle(color: Colors.red.shade600, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
