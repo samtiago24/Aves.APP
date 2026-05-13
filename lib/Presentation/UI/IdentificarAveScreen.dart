@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
+// Asegúrate de que esta ruta sea la correcta donde guardaste tu BirdClassifier
+import 'package:aves_app/services/classifier_service.dart';
 
 class IdentificarAveScreen extends StatefulWidget {
   const IdentificarAveScreen({super.key});
@@ -9,98 +12,131 @@ class IdentificarAveScreen extends StatefulWidget {
 }
 
 class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
-  CameraController? _controller;
-  bool _isCameraInitialized = false;
+  File? _image;
+  final _picker = ImagePicker();
 
-  // Método para encender la cámara
-  Future<void> _initializeCamera() async {
-    // 1. Obtener lista de cámaras disponibles
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) return;
+  // CORRECCIÓN: Usar el nombre de la clase que definiste: BirdClassifier
+  final _classifier = BirdClassifier();
+  Map<String, dynamic>? _result;
 
-    // 2. Configurar el controlador (usamos la cámara trasera)
-    _controller = CameraController(
-      cameras[0],
-      ResolutionPreset
-          .medium, // Resolución 224x224 ideal para tu modelo después
-      enableAudio: false,
+  @override
+  void initState() {
+    super.initState();
+    _loadModel();
+  }
+
+  // RNF02: Carga el modelo al inicio para que la respuesta sea < 2s [cite: 20]
+  Future<void> _loadModel() async {
+    await _classifier.loadModel();
+  }
+
+  // RF01: Captura de imagen desde cámara o galería [cite: 4]
+  Future<void> _pickImage(ImageSource source) async {
+    final pickedFile = await _picker.pickImage(
+      source: source,
+      maxWidth: 224, // Optimizado para el tamaño de entrada de tu modelo
+      maxHeight: 224,
+      imageQuality: 80, // RNF07: Optimización de almacenamiento
     );
 
-    try {
-      await _controller!.initialize();
-      if (!mounted) return;
+    if (pickedFile != null) {
       setState(() {
-        _isCameraInitialized = true;
+        _image = File(pickedFile.path);
       });
-    } catch (e) {
-      debugPrint("Error al inicializar cámara: $e");
+      _runInference();
     }
   }
 
-  @override
-  void dispose() {
-    _controller?.dispose(); // Muy importante cerrar la cámara al salir
-    super.dispose();
+  // RF02: Ejecutar el modelo localmente
+  Future<void> _runInference() async {
+    if (_image != null) {
+      final result = await _classifier.classify(_image!);
+      setState(() {
+        _result = result;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isCameraInitialized) {
-      return Center(
+    // RNF04: Colores Institucionales UCC [cite: 23]
+    final primaryGreen = const Color(0xFF80BA27);
+    final darkBlue = const Color(0xFF2C3E50);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("IDENTIFICAR AVE"),
+        backgroundColor: darkBlue,
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.camera_enhance_outlined,
-              size: 80,
-              color: Colors.grey,
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: _initializeCamera,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 15,
+            const SizedBox(height: 20),
+            // RF03: Validación Visual - Mostrar la foto capturada [cite: 6]
+            if (_image != null)
+              Center(child: Image.file(_image!, height: 250))
+            else
+              const Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Icon(Icons.image_search, size: 100, color: Colors.grey),
+              ),
+
+            if (_result != null)
+              Container(
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      "Especie Detectada:",
+                      style: TextStyle(color: darkBlue, fontSize: 16),
+                    ),
+                    Text(
+                      _result!['label'].toString().toUpperCase(),
+                      style: TextStyle(
+                        color: primaryGreen,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text("Confianza: ${_result!['confidenceText']}"),
+                  ],
                 ),
               ),
-              child: const Text(
-                "ACTIVAR CÁMARA",
-                style: TextStyle(color: Colors.white),
-              ),
+
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text("CÁMARA"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text("GALERÍA"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: darkBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      );
-    }
-
-    return Stack(
-      children: [
-        // Muestra el feed de la cámara
-        SizedBox(
-          width: double.infinity,
-          height: double.infinity,
-          child: CameraPreview(_controller!),
-        ),
-
-        // Botón para capturar (lógica de IA irá aquí)
-        Positioned(
-          bottom: 40,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: FloatingActionButton(
-              onPressed: () {
-                // Aquí llamaremos al UseCase para identificar
-                debugPrint("Capturando ave...");
-              },
-              backgroundColor: Colors.white,
-              child: const Icon(Icons.camera, color: Colors.black, size: 30),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
