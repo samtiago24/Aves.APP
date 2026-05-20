@@ -7,8 +7,25 @@ class BirdClassifier {
   Interpreter? _interpreter;
   bool _isLoaded = false;
 
-  // 16 especies del Tolima presentes en BirdNET_6K_GLOBAL_MODEL
   static const List<String> labels = [
+    // === 16 especies originales ===
+    'Avefría teroCSV',
+    'Baltimore Oriole',
+    'Bienteveo Común',
+    'Canario coronado',
+    'Colibrí Cola Canela',
+    'Fiofío Silbón',
+    'Garza dedos dorados',
+    'Jacana',
+    'Luis Pico Grueso',
+    'Papamoscas rayado chico',
+    'Saltador Gris',
+    'Saltador garganta ocre',
+    'Tangara Azulgris',
+    'Torcaza Colorada',
+    'Vireo Ojos Rojos',
+    'Zorzal sabia',
+    // === 16 especies BirdNET Tolima ===
     'Aburria aburri_Wattled Guan',
     'Accipiter bicolor_Bicolored Hawk',
     'Adelomyia melanogenys_Speckled Hummingbird',
@@ -28,7 +45,25 @@ class BirdClassifier {
   ];
 
   static const Map<String, String> referenceImages = {
-    'Aburria aburri_Wattled Guan':             'lib/assets/images/aburria_aburri.jpg',
+    // === 16 especies originales ===
+    'Avefría teroCSV':           'lib/assets/images/avefria_terocsv.jpg',
+    'Baltimore Oriole':           'lib/assets/images/baltimore_oriole.jpg',
+    'Bienteveo Común':           'lib/assets/images/bienteveo_comun.jpg',
+    'Canario coronado':           'lib/assets/images/canario_coronado.jpg',
+    'Colibrí Cola Canela':        'lib/assets/images/colibri_cola_canela.jpg',
+    'Fiofío Silbón':             'lib/assets/images/fiofio_silbon.jpg',
+    'Garza dedos dorados':        'lib/assets/images/garza_dedos_dorados.jpg',
+    'Jacana':                     'lib/assets/images/jacana.jpg',
+    'Luis Pico Grueso':           'lib/assets/images/luis_pico_grueso.jpg',
+    'Papamoscas rayado chico':    'lib/assets/images/papamoscas_rayado_chico.jpg',
+    'Saltador Gris':              'lib/assets/images/saltador_gris.jpg',
+    'Saltador garganta ocre':     'lib/assets/images/saltador_garganta_ocre.jpg',
+    'Tangara Azulgris':           'lib/assets/images/tangara_azulgris.jpg',
+    'Torcaza Colorada':           'lib/assets/images/torcaza_colorada.jpg',
+    'Vireo Ojos Rojos':           'lib/assets/images/vireo_ojos_rojos.jpg',
+    'Zorzal sabia':               'lib/assets/images/zorzal_sabia.jpg',
+    // === 16 especies BirdNET Tolima ===
+    'Aburria aburri_Wattled Guan':              'lib/assets/images/aburria_aburri.jpg',
     'Accipiter bicolor_Bicolored Hawk':         'lib/assets/images/accipiter_bicolor.jpg',
     'Adelomyia melanogenys_Speckled Hummingbird': 'lib/assets/images/adelomyia_melanogenys.jpg',
     'Agelaioides badius_Grayish Baywing':       'lib/assets/images/agelaioides_badius.jpg',
