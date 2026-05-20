@@ -22,8 +22,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.aves.avesflutter"
-        minSdk = flutter.minSdkVersion // Firebase requiere minSdk >= 23
+        applicationId = "com.example.aves_app"
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
