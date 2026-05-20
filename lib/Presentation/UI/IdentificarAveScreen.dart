@@ -19,14 +19,13 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   File? _image;
   final _picker = ImagePicker();
 
-  // Clasificadores
   final _classifierOriginal = BirdClassifier();
   final _classifierBirdNet  = BirdNetClassifier();
 
-  // Modelo activo
-  ModeloAves _modeloSeleccionado = ModeloAves.original;
+  ModeloAves _modeloSeleccionado = ModeloAves.birdnet; // BirdNET por defecto
   bool _modeloOriginalListo  = false;
   bool _modeloBirdNetListo   = false;
+  bool _modeloOriginalError  = false; // true si no existe el archivo
 
   Map<String, dynamic>? _result;
   bool _isLoading  = false;
@@ -42,19 +41,20 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
   }
 
   Future<void> _loadModels() async {
-    // Carga ambos modelos en paralelo
-    await Future.wait([
-      _classifierOriginal.loadModel().then((_) {
-        if (mounted) setState(() => _modeloOriginalListo = true);
-      }).catchError((e) {
-        if (mounted) _showSnack('Error modelo original: $e', Colors.red);
-      }),
-      _classifierBirdNet.loadModel().then((_) {
-        if (mounted) setState(() => _modeloBirdNetListo = true);
-      }).catchError((e) {
-        if (mounted) _showSnack('Error modelo BirdNET: $e', Colors.red);
-      }),
-    ]);
+    // Cargar BirdNET (principal)
+    _classifierBirdNet.loadModel().then((_) {
+      if (mounted) setState(() => _modeloBirdNetListo = true);
+    }).catchError((e) {
+      if (mounted) _showSnack('Error modelo BirdNET: $e', Colors.red);
+    });
+
+    // Intentar cargar modelo original (puede no existir)
+    _classifierOriginal.loadModel().then((_) {
+      if (mounted) setState(() => _modeloOriginalListo = true);
+    }).catchError((_) {
+      // Si falla simplemente marcamos el error, sin snackbar
+      if (mounted) setState(() => _modeloOriginalError = true);
+    });
   }
 
   bool get _modeloActualListo => _modeloSeleccionado == ModeloAves.original
@@ -66,12 +66,15 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
           ? _classifierOriginal.classify(image)
           : _classifierBirdNet.classify(image);
 
-  int get _cantidadEspecies => _modeloSeleccionado == ModeloAves.original ? 16 : 16;
-  String get _nombreModelo  => _modeloSeleccionado == ModeloAves.original
+  String get _nombreModelo => _modeloSeleccionado == ModeloAves.original
       ? 'Modelo Original (16 aves)'
       : 'BirdNET Tolima (16 aves)';
 
   void _cambiarModelo(ModeloAves nuevo) {
+    if (nuevo == ModeloAves.original && _modeloOriginalError) {
+      _showSnack('El modelo original no está disponible en este dispositivo.', Colors.orange);
+      return;
+    }
     setState(() {
       _modeloSeleccionado = nuevo;
       _result  = null;
@@ -169,7 +172,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     super.dispose();
   }
 
-  // ─── UI ────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     const primaryGreen = Color(0xFF80BA27);
@@ -186,12 +188,8 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-
-            // ── Selector de modelo ──────────────────────────
             _buildModelSelector(primaryGreen, darkBlue),
             const SizedBox(height: 14),
-
-            // ── Imagen ──────────────────────────────────────
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: _image != null
@@ -203,8 +201,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                     ),
             ),
             const SizedBox(height: 16),
-
-            // ── Resultado ───────────────────────────────────
             if (_isLoading)
               Column(children: [
                 CircularProgressIndicator(color: primaryGreen),
@@ -212,13 +208,10 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 Text('Analizando con $_nombreModelo...', textAlign: TextAlign.center),
               ])
             else if (_noEsAve)
-              _buildNoEsAveCard(_cantidadEspecies)
+              _buildNoEsAveCard()
             else if (_result != null)
               ..._buildResults(primaryGreen, darkBlue),
-
             const SizedBox(height: 16),
-
-            // ── Botones cámara / galería ────────────────────
             Row(children: [
               Expanded(child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : () => _pickImage(ImageSource.camera),
@@ -240,7 +233,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
                 ),
               )),
             ]),
-
             if (_result != null && !_noEsAve) ...[
               const SizedBox(height: 10),
               ElevatedButton.icon(
@@ -273,7 +265,6 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     );
   }
 
-  // ── Selector de modelo ──────────────────────────────────────
   Widget _buildModelSelector(Color primaryGreen, Color darkBlue) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -293,24 +284,24 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            // Opción: Modelo Original
             Expanded(child: _modeloBtn(
               label: 'Modelo Original',
               sublabel: '16 aves',
               icon: Icons.science,
               activo: _modeloSeleccionado == ModeloAves.original,
               listo: _modeloOriginalListo,
+              error: _modeloOriginalError,
               color: primaryGreen,
               onTap: () => _cambiarModelo(ModeloAves.original),
             )),
             const SizedBox(width: 10),
-            // Opción: BirdNET
             Expanded(child: _modeloBtn(
               label: 'BirdNET',
               sublabel: 'Tolima 16 aves',
               icon: Icons.travel_explore,
               activo: _modeloSeleccionado == ModeloAves.birdnet,
               listo: _modeloBirdNetListo,
+              error: false,
               color: const Color(0xFF1565C0),
               onTap: () => _cambiarModelo(ModeloAves.birdnet),
             )),
@@ -326,27 +317,37 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     required IconData icon,
     required bool activo,
     required bool listo,
+    required bool error,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final deshabilitado = error;
     return GestureDetector(
-      onTap: onTap,
+      onTap: deshabilitado ? () => _showSnack('Modelo no disponible en este dispositivo.', Colors.orange) : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: activo ? color.withOpacity(0.12) : Colors.grey.shade100,
+          color: deshabilitado
+              ? Colors.grey.shade100
+              : activo ? color.withOpacity(0.12) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: activo ? color : Colors.grey.shade300,
+            color: deshabilitado
+                ? Colors.grey.shade300
+                : activo ? color : Colors.grey.shade300,
             width: activo ? 2 : 1,
           ),
         ),
         child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, color: activo ? color : Colors.grey, size: 18),
+            Icon(icon,
+                color: deshabilitado ? Colors.grey.shade400 : activo ? color : Colors.grey,
+                size: 18),
             const SizedBox(width: 4),
-            if (!listo)
+            if (deshabilitado)
+              Icon(Icons.block, color: Colors.grey.shade400, size: 14)
+            else if (!listo)
               SizedBox(width: 14, height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2, color: color))
             else
@@ -355,21 +356,23 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
           const SizedBox(height: 4),
           Text(label,
               style: TextStyle(
-                color: activo ? color : Colors.grey.shade600,
+                color: deshabilitado ? Colors.grey.shade400 : activo ? color : Colors.grey.shade600,
                 fontWeight: activo ? FontWeight.bold : FontWeight.normal,
                 fontSize: 12,
               ),
               textAlign: TextAlign.center),
-          Text(sublabel,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 10),
+          Text(deshabilitado ? 'No disponible' : sublabel,
+              style: TextStyle(
+                color: deshabilitado ? Colors.grey.shade400 : Colors.grey.shade500,
+                fontSize: 10,
+              ),
               textAlign: TextAlign.center),
         ]),
       ),
     );
   }
 
-  // ── No es ave ───────────────────────────────────────────────
-  Widget _buildNoEsAveCard(int nEspecies) {
+  Widget _buildNoEsAveCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -384,7 +387,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
             style: TextStyle(color: Colors.red.shade700, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         Text(
-          'La imagen no corresponde a ninguna de las $nEspecies especies del modelo activo.\nIntenta con una foto más clara o desde otro ángulo.',
+          'La imagen no corresponde a ninguna de las 16 especies del modelo activo.\nIntenta con una foto más clara o desde otro ángulo.',
           style: TextStyle(color: Colors.red.shade600, fontSize: 13),
           textAlign: TextAlign.center,
         ),
@@ -392,32 +395,28 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen> {
     );
   }
 
-  // ── Resultados ──────────────────────────────────────────────
   List<Widget> _buildResults(Color primaryGreen, Color darkBlue) {
     final top3      = _result!['top3'] as List<Map<String, dynamic>>;
     final topResult = top3.first;
     final refImage  = topResult['referenceImage'] as String;
 
     return [
-      // Badge del modelo usado
       Center(
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: _modeloSeleccionado == ModeloAves.original
-                ? const Color(0xFF80BA27).withOpacity(0.15)
+                ? primaryGreen.withOpacity(0.15)
                 : const Color(0xFF1565C0).withOpacity(0.15),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             _modeloSeleccionado == ModeloAves.original ? '🧪 Modelo Original' : '🌎 BirdNET Tolima',
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontSize: 11, fontWeight: FontWeight.w600,
               color: _modeloSeleccionado == ModeloAves.original
-                  ? const Color(0xFF80BA27)
-                  : const Color(0xFF1565C0),
+                  ? primaryGreen : const Color(0xFF1565C0),
             ),
           ),
         ),
