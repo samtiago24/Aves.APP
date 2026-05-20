@@ -12,6 +12,15 @@
 
 ---
 
+## 👨‍💻 Autores
+
+| Nombre | Rol |
+|---|---|
+| **Santiago Lopez** | Desarrollador principal |
+| **Sebastian Castro** | Desarrollador principal |
+
+---
+
 ## 📋 Tabla de Contenidos
 
 - [Descripción General](#-descripción-general)
@@ -53,6 +62,7 @@ Los resultados incluyen el nombre de la especie, el porcentaje de confianza, las
 | 🌍 Distribución geográfica | Mapa de distribución natural por especie |
 | 🌙 Tema claro/oscuro | Soporte completo para modo oscuro y claro (Material 3) |
 | 💾 Almacenamiento local | Base de datos SQLite con UUID único por registro |
+| ☁️ Sincronización en la nube | Sube avistamientos a Firebase Firestore automáticamente |
 
 ---
 
@@ -103,7 +113,8 @@ Aves.APP/
 │   ├── Services/
 │   │   ├── classifier_service.dart        # Clasificador TFLite (BirdClassifier)
 │   │   ├── database_service.dart          # SQLite (avistamientos locales)
-│   │   └── location_service.dart          # GPS y geolocalizacion
+│   │   ├── location_service.dart          # GPS y geolocalización
+│   │   └── sync_service.dart              # Sincronización Firebase (RF09)
 │   ├── Data/
 │   │   ├── catalogo_especies.dart         # Datos estáticos del catálogo
 │   │   └── species_locations.dart         # Coordenadas de distribución por especie
@@ -335,7 +346,7 @@ final id = await DatabaseService.guardarAvistamiento(
 // Obtener todos los avistamientos
 final lista = await DatabaseService.obtenerTodos();
 
-// Obtener solo no sincronizados (para futura sincronización)
+// Obtener solo no sincronizados
 final pendientes = await DatabaseService.obtenerNosincronizados();
 
 // Marcar como sincronizado
@@ -344,6 +355,17 @@ await DatabaseService.marcarSincronizado(id);
 // Eliminar registro
 await DatabaseService.eliminar(id);
 ```
+
+---
+
+### `SyncService` (`sync_service.dart`)
+
+Sincronización automática con Firebase Firestore (RF09):
+
+- Detecta conexión a internet con `connectivity_plus`
+- Sube todos los avistamientos con `sincronizado = 0` a la colección `avistamientos` en Firestore
+- Marca cada registro como sincronizado en la BD local tras subirlo exitosamente
+- Se activa automáticamente al detectar conexión desde `main.dart`
 
 ---
 
@@ -361,7 +383,7 @@ Abstrae el acceso a GPS del dispositivo usando el paquete `geolocator`:
 
 La app utiliza **SQLite** (a través de `sqflite`) para persistir los avistamientos sin necesidad de conexión a internet. El archivo de base de datos se crea automáticamente en el primer uso con el nombre `aves.db` en el directorio de bases de datos del dispositivo.
 
-El campo `sincronizado` permite implementar una futura sincronización con un servidor remoto: los registros marcados como `0` son los pendientes de subir.
+El campo `sincronizado` permite la sincronización con Firebase Firestore: los registros marcados como `0` son los pendientes de subir a la nube.
 
 ---
 
@@ -395,6 +417,9 @@ El modelo fue entrenado con imágenes de las 16 especies listadas. La inferencia
 | `path_provider` | ^2.1.5 | Acceso a rutas del sistema de archivos |
 | `path` | ^1.9.1 | Manipulación de rutas |
 | `url_launcher` | ^6.3.1 | Apertura de URLs externas |
+| `firebase_core` | ^3.6.0 | Inicialización de Firebase |
+| `cloud_firestore` | ^5.4.4 | Base de datos en la nube (RF09) |
+| `connectivity_plus` | ^6.0.3 | Detección de conectividad a internet |
 | `cupertino_icons` | ^1.0.8 | Iconos estilo iOS |
 
 ---
@@ -425,5 +450,5 @@ El modelo fue entrenado con imágenes de las 16 especies listadas. La inferencia
 ---
 
 <p align="center">
-  Desarrollado con ❤️ y Flutter — 2025
+  Desarrollado con ❤️ y Flutter por <strong>Santiago Lopez</strong> y <strong>Sebastian Castro</strong> — 2025
 </p>

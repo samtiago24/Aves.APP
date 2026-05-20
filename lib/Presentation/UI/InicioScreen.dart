@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
+// Autores: Santiago Lopez, Sebastian Castro
 class InicioScreen extends StatelessWidget {
   const InicioScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos el esquema de colores actual del tema (Light o Dark)
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // El fondo ahora se adapta automáticamente al tema definido en main.dart
       body: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -22,7 +21,6 @@ class InicioScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 48,
                 fontWeight: FontWeight.w900,
-                // onSurface detecta si el fondo es claro u oscuro y pone el contraste ideal
                 color: colors.onSurface,
                 height: 1.1,
               ),
@@ -32,7 +30,7 @@ class InicioScreen extends StatelessWidget {
               width: 60,
               height: 5,
               decoration: BoxDecoration(
-                color: colors.primary, // Usa el color principal del tema
+                color: colors.primary,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -55,6 +53,35 @@ class InicioScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 40),
+            // Créditos de autores
+            Divider(color: colors.onSurface.withOpacity(0.15)),
+            const SizedBox(height: 16),
+            Text(
+              "Desarrollado por",
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurface.withOpacity(0.45),
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Santiago Lopez",
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: colors.primary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              "Sebastian Castro",
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: colors.primary,
+              ),
+            ),
           ],
         ),
       ),
