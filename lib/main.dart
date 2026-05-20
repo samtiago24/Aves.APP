@@ -1,10 +1,20 @@
 import 'package:aves_app/Core/UI/MainNavigationScreen.dart';
+import 'package:aves_app/Services/sync_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 // Notificador global para el tema
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar Firebase (RF09)
+  await Firebase.initializeApp();
+
+  // Escuchar cambios de conectividad para sincronización automática (RF09)
+  SyncService.escucharConectividad();
+
   runApp(const MyApp());
 }
 
