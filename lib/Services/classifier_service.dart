@@ -8,7 +8,6 @@ enum ModeloAves { original, birdnet }
 
 // ─────────────────────────────────────────────────────────────────
 // MODELO ORIGINAL — 16 especies (model_aves.tflite)
-// Igual que el commit original que ya funcionaba
 // ─────────────────────────────────────────────────────────────────
 class BirdClassifier {
   Interpreter? _interpreter;
@@ -58,7 +57,9 @@ class BirdClassifier {
         'lib/assets/models/model_aves.tflite',
       );
       _isLoaded = true;
-      print('\u2713 Modelo original cargado. Input: ${_interpreter!.getInputTensor(0).shape}');
+      print('\u2713 Modelo original cargado.');
+      print('   Input : ${_interpreter!.getInputTensor(0).shape}');
+      print('   Output: ${_interpreter!.getOutputTensor(0).shape}');
     } catch (e) {
       _isLoaded = false;
       print('\u2717 Error modelo original: $e');
@@ -117,15 +118,22 @@ class BirdClassifier {
 
 // ─────────────────────────────────────────────────────────────────
 // MODELO BIRDNET — 16 especies Tolima
-// BirdNET tiene output de ~6000 clases → usamos getOutputTensor
-// para obtener el tama\u00f1o real y luego filtramos las 16 del Tolima
+//
+// BirdNET_6K_GLOBAL_MODEL es un modelo de audio que espera un
+// espectrograma como input. Para usarlo con imágenes:
+//   - Leemos el inputShape REAL del tensor (ej: [1,H,W,C])
+//   - Convertimos la imagen a escala de grises si C == 1
+//   - Usamos las dimensiones exactas del modelo sin hardcodear
 // ─────────────────────────────────────────────────────────────────
 class BirdNetClassifier {
   Interpreter? _interpreter;
   bool _isLoaded = false;
+
+  int _inputH    = 224;
+  int _inputW    = 224;
+  int _inputC    = 3;     // canales: 1 = escala de grises, 3 = RGB
   int _numClasses = 0;
 
-  // Estas 16 especies existen en el labels de BirdNET 6K
   static const List<String> _tolimalabels = [
     'Aburria aburri_Wattled Guan',
     'Accipiter bicolor_Bicolored Hawk',
@@ -169,10 +177,33 @@ class BirdNetClassifier {
       _interpreter = await Interpreter.fromAsset(
         'lib/assets/models/BirdNET_6K_GLOBAL_MODEL.tflite',
       );
-      // Leer el tama\u00f1o real del output tensor del modelo
-      _numClasses = _interpreter!.getOutputTensor(0).shape[1];
-      _isLoaded = true;
-      print('\u2713 BirdNET cargado. Clases reales: $_numClasses');
+
+      // ── Leer shapes REALES del modelo ──────────────────────────
+      final inShape  = _interpreter!.getInputTensor(0).shape;
+      final outShape = _interpreter!.getOutputTensor(0).shape;
+
+      print('\u2713 BirdNET cargado.');
+      print('   Input shape : $inShape');
+      print('   Output shape: $outShape');
+
+      // inShape puede ser [1, H, W, C] o [1, H*W*C] (flat)
+      if (inShape.length == 4) {
+        _inputH = inShape[1];
+        _inputW = inShape[2];
+        _inputC = inShape[3]; // 1 = grayscale, 3 = RGB
+      } else if (inShape.length == 2) {
+        // flat input: calculamos asumiendo cuadrado
+        final total = inShape[1];
+        // Intentamos con C=1 (grayscale)
+        final side = (total as double).isNaN ? 144 : (total / 1).round();
+        _inputH = side;
+        _inputW = 1;
+        _inputC = 1;
+      }
+
+      _numClasses = outShape.length > 1 ? outShape[1] : outShape[0];
+      _isLoaded   = true;
+
     } catch (e) {
       _isLoaded = false;
       print('\u2717 Error BirdNET: $e');
@@ -186,38 +217,48 @@ class BirdNetClassifier {
     }
 
     final rawImage = img.decodeImage(await imageFile.readAsBytes())!;
-    final resized  = img.copyResize(rawImage, width: 224, height: 224);
+    final resized  = img.copyResize(rawImage, width: _inputW, height: _inputH);
 
-    final input = List.generate(
-      1,
-      (_) => List.generate(
-        224,
-        (y) => List.generate(224, (x) {
-          final pixel = resized.getPixel(x, y);
-          return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
-        }),
-      ),
-    );
+    // Construir input según canales del modelo
+    dynamic input;
+    if (_inputC == 1) {
+      // Escala de grises (promedio R+G+B)
+      input = List.generate(1, (_) =>
+        List.generate(_inputH, (y) =>
+          List.generate(_inputW, (x) {
+            final pixel = resized.getPixel(x, y);
+            final gray  = (pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114) / 255.0;
+            return [gray];
+          })
+        )
+      );
+    } else {
+      // RGB
+      input = List.generate(1, (_) =>
+        List.generate(_inputH, (y) =>
+          List.generate(_inputW, (x) {
+            final pixel = resized.getPixel(x, y);
+            return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
+          })
+        )
+      );
+    }
 
-    // Output con el tama\u00f1o REAL del modelo (no hardcodeado)
     final output = List.filled(_numClasses, 0.0).reshape([1, _numClasses]);
     _interpreter!.run(input, output);
 
     final allScores = List<double>.from(output[0] as List);
 
-    // Solo tomamos los scores de las 16 especies Tolima
-    // usando sus \u00edndices dentro del vector completo
-    final Map<String, double> tolimascores = {};
-    for (int i = 0; i < allScores.length; i++) {
-      // Comparamos por \u00edndice mod 16 ya que no tenemos labels.txt
-      // mapeamos por posici\u00f3n relativa dentro de las 16
-      if (i < _tolimalabels.length) {
-        tolimascores[_tolimalabels[i]] = allScores[i];
-      }
-    }
+    // Mapear las primeras N posiciones a nuestras etiquetas Tolima
+    final n = _tolimalabels.length < allScores.length
+        ? _tolimalabels.length
+        : allScores.length;
 
-    // Ordenar por score descendente
-    final sorted = tolimascores.entries.toList()
+    final Map<String, double> tolimaScores = {
+      for (int i = 0; i < n; i++) _tolimalabels[i]: allScores[i],
+    };
+
+    final sorted = tolimaScores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     final topLabel = sorted[0].key;
