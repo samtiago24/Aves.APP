@@ -11,7 +11,6 @@ import 'package:aves_app/Presentation/UI/DistribucionAveScreen.dart';
 
 class IdentificarAveScreen extends StatefulWidget {
   const IdentificarAveScreen({super.key});
-
   @override
   State<IdentificarAveScreen> createState() => _IdentificarAveScreenState();
 }
@@ -36,15 +35,14 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
   bool _noEsAve   = false;
 
   static const double _umbralConfianza = 0.40;
-  static const _green  = Color(0xFF80BA27);
-  static const _blue   = Color(0xFF1565C0);
-  static const _dark   = Color(0xFF2C3E50);
+  static const _green = Color(0xFF80BA27);
+  static const _blue  = Color(0xFF1565C0);
+  static const _dark  = Color(0xFF2C3E50);
 
   @override
   void initState() {
     super.initState();
     _loadModels();
-    // Al abrir la pantalla, sincronizar pendientes si hay internet
     FirestoreService.sincronizarPendientes();
   }
 
@@ -62,8 +60,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
   }
 
   bool get _modeloActualListo => _modeloSeleccionado == ModeloAves.original
-      ? _modeloOriginalListo
-      : _modeloBirdNetListo;
+      ? _modeloOriginalListo : _modeloBirdNetListo;
 
   Future<Map<String, dynamic>> _clasificar(File image) =>
       _modeloSeleccionado == ModeloAves.original
@@ -72,27 +69,19 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
 
   void _cambiarModelo(ModeloAves nuevo) {
     if (nuevo == ModeloAves.original && _modeloOriginalError) {
-      _showSnack('Modelo original no disponible en este dispositivo.', Colors.orange);
+      _showSnack('Modelo original no disponible.', Colors.orange);
       return;
     }
-    setState(() {
-      _modeloSeleccionado = nuevo;
-      _result  = null;
-      _noEsAve = false;
-      _image   = null;
-    });
+    setState(() { _modeloSeleccionado = nuevo; _result = null; _noEsAve = false; _image = null; });
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final pickedFile = await _picker.pickImage(
-      source: source,
-      maxWidth: 600,
-      maxHeight: 600,
-      imageQuality: 92,
-      preferredCameraDevice: CameraDevice.rear,
+    final picked = await _picker.pickImage(
+      source: source, maxWidth: 600, maxHeight: 600,
+      imageQuality: 92, preferredCameraDevice: CameraDevice.rear,
     );
-    if (pickedFile != null) {
-      setState(() { _image = File(pickedFile.path); _result = null; _noEsAve = false; });
+    if (picked != null) {
+      setState(() { _image = File(picked.path); _result = null; _noEsAve = false; });
       _runInference();
     }
   }
@@ -100,7 +89,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
   Future<void> _runInference() async {
     if (_image == null) return;
     if (!_modeloActualListo) {
-      _showSnack('El modelo a\u00fan se est\u00e1 cargando, intenta en unos segundos.', Colors.orange);
+      _showSnack('El modelo a\u00fan se est\u00e1 cargando...', Colors.orange);
       return;
     }
     setState(() => _isLoading = true);
@@ -113,55 +102,134 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
       } else {
         setState(() { _result = result; _noEsAve = false; _isLoading = false; });
       }
+      // Mostrar diálogo de diagnóstico si el modelo activo es BirdNET
+      if (_modeloSeleccionado == ModeloAves.birdnet && mounted) {
+        _mostrarDialogoDiagnostico();
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnack('Error al analizar: $e', Colors.red);
+      if (_modeloSeleccionado == ModeloAves.birdnet && mounted) {
+        _mostrarDialogoDiagnostico();
+      }
     }
+  }
+
+  /// Diálogo que muestra los logs de BirdNET directamente en pantalla
+  void _mostrarDialogoDiagnostico() {
+    final bn = _classifierBirdNet;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: const [
+          Icon(Icons.bug_report_rounded, color: Color(0xFF80BA27), size: 20),
+          SizedBox(width: 8),
+          Text('Diagnóstico BirdNET',
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+        ]),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _diagRow('\u2139\ufe0f Modelo', 'BirdNET_6K_GLOBAL_MODEL.tflite'),
+              _diagRow('\ud83d\udcca ${bn.infoInput.isNotEmpty ? bn.infoInput : "Input: [1, 144, 144, 1]"}', ''),
+              _diagRow('\ud83d\udcca ${bn.infoOutput.isNotEmpty ? bn.infoOutput : "Output: [1, 6522]"}', ''),
+              const Divider(color: Colors.white24, height: 20),
+              if (bn.infoTop3.isNotEmpty) ..._top3Widgets(bn.infoTop3),
+              if (bn.infoError.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade900.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '\u2717 Error:\n${bn.infoError}',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar', style: TextStyle(color: Color(0xFF80BA27))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _diagRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+          children: [
+            TextSpan(text: label, style: const TextStyle(color: Colors.white70)),
+            if (value.isNotEmpty)
+              TextSpan(text: '  $value', style: const TextStyle(color: Color(0xFF80BA27))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _top3Widgets(String raw) {
+    final lines = raw.split('\n');
+    return [
+      const Text('\ud83c\udfc6 Top 3 resultados:',
+          style: TextStyle(color: Colors.white60, fontSize: 11)),
+      const SizedBox(height: 6),
+      ...lines.map((l) => Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Text(l, style: TextStyle(
+          color: l.contains('%') ? const Color(0xFF80BA27) : Colors.white,
+          fontSize: 11, fontFamily: 'monospace',
+        )),
+      )),
+    ];
   }
 
   Future<void> _guardarAvistamiento() async {
     if (_result == null || _image == null) return;
     setState(() => _isSaving = true);
-
     try {
       final position = await LocationService.getCurrentPosition();
       final lat = position?.latitude  ?? 0.0;
       final lng = position?.longitude ?? 0.0;
-      final top3    = _result!['top3'] as List<Map<String, dynamic>>;
+      final top3     = _result!['top3'] as List<Map<String, dynamic>>;
       final especie  = top3.first['label'].toString();
       final confianza = top3.first['confidence'] as double;
 
-      // 1️⃣ Siempre guardar en SQLite local primero
+      // 1️⃣ Guardar siempre local
       final id = await DatabaseService.guardarAvistamiento(
-        especie:   especie,
-        confianza: confianza,
-        fotoPath:  _image!.path,
-        latitud:   lat,
-        longitud:  lng,
+        especie: especie, confianza: confianza,
+        fotoPath: _image!.path, latitud: lat, longitud: lng,
       );
 
-      // 2️⃣ Intentar subir a Firebase si hay internet
+      // 2️⃣ Si hay internet, subir a Firebase
       final tieneInternet = await FirestoreService.hayInternet();
-      String mensajeExtra = '';
-
+      String extra = '';
       if (tieneInternet) {
-        // Obtener el avistamiento recién creado para subirlo
         final todos = await DatabaseService.obtenerTodos();
-        final avistamiento = todos.firstWhere((a) => a.id == id);
-        final subido = await FirestoreService.sincronizarAvistamiento(avistamiento);
-        mensajeExtra = subido ? ' ☁️ Firebase ✓' : ' (Firebase falló)';
+        final av    = todos.firstWhere((a) => a.id == id);
+        final subido = await FirestoreService.sincronizarAvistamiento(av);
+        extra = subido ? ' \u2601\ufe0f Firebase \u2713' : ' (Firebase fall\u00f3)';
       } else {
-        mensajeExtra = ' 📵 Sin internet, guardado solo local';
+        extra = ' \ud83d\udcf5 Sin internet, solo local';
       }
 
       setState(() => _isSaving = false);
       _showSnack(
-        position != null
-            ? '✓ Guardado: $especie$mensajeExtra'
-            : '✓ Guardado sin GPS$mensajeExtra',
+        position != null ? '\u2713 Guardado: $especie$extra' : '\u2713 Guardado sin GPS$extra',
         tieneInternet ? _green : Colors.orange,
       );
-
     } catch (e) {
       setState(() => _isSaving = false);
       _showSnack('Error al guardar: $e', Colors.red);
@@ -173,7 +241,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     final top3 = _result!['top3'] as List<Map<String, dynamic>>;
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => DistribucionAveScreen(
-        especie:   top3.first['label'].toString(),
+        especie: top3.first['label'].toString(),
         confianza: top3.first['confidence'] as double,
       ),
     ));
@@ -193,13 +261,14 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     super.dispose();
   }
 
-  // ── UI ──────────────────────────────────────────────────────────
+  // ── UI ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       appBar: AppBar(
-        title: const Text('IDENTIFICAR AVE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('IDENTIFICAR AVE',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         backgroundColor: _dark,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -235,19 +304,15 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
             ),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: _actionBtn(
-                icon: Icons.camera_alt_rounded, label: 'C\u00c1MARA', color: _green,
-                onTap: _isLoading ? null : () => _pickImage(ImageSource.camera),
-              )),
+              Expanded(child: _actionBtn(icon: Icons.camera_alt_rounded, label: 'C\u00c1MARA', color: _green,
+                  onTap: _isLoading ? null : () => _pickImage(ImageSource.camera))),
               const SizedBox(width: 10),
-              Expanded(child: _actionBtn(
-                icon: Icons.photo_library_rounded, label: 'GALER\u00cdA', color: _dark,
-                onTap: _isLoading ? null : () => _pickImage(ImageSource.gallery),
-              )),
+              Expanded(child: _actionBtn(icon: Icons.photo_library_rounded, label: 'GALER\u00cdA', color: _dark,
+                  onTap: _isLoading ? null : () => _pickImage(ImageSource.gallery))),
             ]),
             const SizedBox(height: 16),
-            if (_isLoading)       _buildLoading()
-            else if (_noEsAve)    _buildNoEsAve()
+            if (_isLoading)        _buildLoading()
+            else if (_noEsAve)     _buildNoEsAve()
             else if (_result != null) ..._buildResults(),
             const SizedBox(height: 20),
           ],
@@ -291,9 +356,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
             color: error ? Colors.grey.shade300 : activo ? color : Colors.grey.shade300,
             width: activo ? 2 : 1,
           ),
-          boxShadow: activo
-              ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))]
-              : [],
+          boxShadow: activo ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))] : [],
         ),
         child: Row(children: [
           Icon(
@@ -339,13 +402,11 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Column(children: [
-        CircularProgressIndicator(
-            color: _modeloSeleccionado == ModeloAves.original ? _green : _blue),
+        CircularProgressIndicator(color: _modeloSeleccionado == ModeloAves.original ? _green : _blue),
         const SizedBox(height: 12),
         Text(
           _modeloSeleccionado == ModeloAves.original
-              ? 'Analizando con Modelo Original...'
-              : 'Analizando con BirdNET...',
+              ? 'Analizando con Modelo Original...' : 'Analizando con BirdNET...',
           style: TextStyle(color: _dark, fontSize: 13),
         ),
       ]),
@@ -478,8 +539,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
                     value: conf,
                     backgroundColor: Colors.grey.shade200,
                     color: i == 0 ? activeColor : Colors.grey.shade400,
-                    minHeight: 5,
-                    borderRadius: BorderRadius.circular(4),
+                    minHeight: 5, borderRadius: BorderRadius.circular(4),
                   ),
                 ])),
                 const SizedBox(width: 8),
@@ -493,10 +553,8 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
         ]),
       ),
       const SizedBox(height: 12),
-      _actionBtn(
-        icon: Icons.map_outlined, label: 'VER D\u00d3NDE ENCONTRARLA', color: _blue,
-        onTap: _verDistribucion,
-      ),
+      _actionBtn(icon: Icons.map_outlined, label: 'VER D\u00d3NDE ENCONTRARLA',
+          color: _blue, onTap: _verDistribucion),
       const SizedBox(height: 8),
       _actionBtn(
         icon: Icons.save_alt_rounded,

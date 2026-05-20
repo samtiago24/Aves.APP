@@ -33,68 +33,60 @@ class BirdClassifier {
   ];
 
   static const Map<String, String> referenceImages = {
-    'Avefr\u00eda teroCSV':        'lib/assets/images/avefria_terocsv.jpg',
-    'Baltimore Oriole':          'lib/assets/images/baltimore_oriole.jpg',
-    'Bienteveo Com\u00fan':        'lib/assets/images/bienteveo_comun.jpg',
-    'Canario coronado':          'lib/assets/images/canario_coronado.jpg',
-    'Colibr\u00ed Cola Canela':    'lib/assets/images/colibri_cola_canela.jpg',
-    'Fiof\u00edo Silb\u00f3n':       'lib/assets/images/fiofio_silbon.jpg',
-    'Garza dedos dorados':       'lib/assets/images/garza_dedos_dorados.jpg',
-    'Jacana':                    'lib/assets/images/jacana.jpg',
-    'Luis Pico Grueso':          'lib/assets/images/luis_pico_grueso.jpg',
-    'Papamoscas rayado chico':   'lib/assets/images/papamoscas_rayado_chico.jpg',
-    'Saltador Gris':             'lib/assets/images/saltador_gris.jpg',
-    'Saltador garganta ocre':    'lib/assets/images/saltador_garganta_ocre.jpg',
-    'Tangara Azulgris':          'lib/assets/images/tangara_azulgris.jpg',
-    'Torcaza Colorada':          'lib/assets/images/torcaza_colorada.jpg',
-    'Vireo Ojos Rojos':          'lib/assets/images/vireo_ojos_rojos.jpg',
-    'Zorzal sabia':              'lib/assets/images/zorzal_sabia.jpg',
+    'Avefr\u00eda teroCSV':       'lib/assets/images/avefria_terocsv.jpg',
+    'Baltimore Oriole':         'lib/assets/images/baltimore_oriole.jpg',
+    'Bienteveo Com\u00fan':       'lib/assets/images/bienteveo_comun.jpg',
+    'Canario coronado':         'lib/assets/images/canario_coronado.jpg',
+    'Colibr\u00ed Cola Canela':   'lib/assets/images/colibri_cola_canela.jpg',
+    'Fiof\u00edo Silb\u00f3n':      'lib/assets/images/fiofio_silbon.jpg',
+    'Garza dedos dorados':      'lib/assets/images/garza_dedos_dorados.jpg',
+    'Jacana':                   'lib/assets/images/jacana.jpg',
+    'Luis Pico Grueso':         'lib/assets/images/luis_pico_grueso.jpg',
+    'Papamoscas rayado chico':  'lib/assets/images/papamoscas_rayado_chico.jpg',
+    'Saltador Gris':            'lib/assets/images/saltador_gris.jpg',
+    'Saltador garganta ocre':   'lib/assets/images/saltador_garganta_ocre.jpg',
+    'Tangara Azulgris':         'lib/assets/images/tangara_azulgris.jpg',
+    'Torcaza Colorada':         'lib/assets/images/torcaza_colorada.jpg',
+    'Vireo Ojos Rojos':         'lib/assets/images/vireo_ojos_rojos.jpg',
+    'Zorzal sabia':             'lib/assets/images/zorzal_sabia.jpg',
   };
 
   Future<void> loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset(
-        'lib/assets/models/model_aves.tflite',
-      );
+      _interpreter = await Interpreter.fromAsset('lib/assets/models/model_aves.tflite');
       _isLoaded = true;
-      print('[ORIGINAL] ✓ Modelo cargado.');
+      print('[ORIGINAL] \u2713 Modelo cargado.');
       print('[ORIGINAL]    Input : ${_interpreter!.getInputTensor(0).shape}');
       print('[ORIGINAL]    Output: ${_interpreter!.getOutputTensor(0).shape}');
     } catch (e) {
       _isLoaded = false;
-      print('[ORIGINAL] ✗ Error al cargar: $e');
+      print('[ORIGINAL] \u2717 Error al cargar: $e');
       rethrow;
     }
   }
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
-    if (!_isLoaded || _interpreter == null) {
-      throw Exception('El modelo original no est\u00e1 cargado.');
-    }
-    final rawImage = img.decodeImage(await imageFile.readAsBytes())!;
-    final resized  = img.copyResize(rawImage, width: 380, height: 380);
-    final input = List.generate(1, (_) =>
-      List.generate(380, (y) =>
-        List.generate(380, (x) {
-          final p = resized.getPixel(x, y);
-          return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
-        })));
+    if (!_isLoaded || _interpreter == null) throw Exception('Modelo original no cargado.');
+    final raw     = img.decodeImage(await imageFile.readAsBytes())!;
+    final resized = img.copyResize(raw, width: 380, height: 380);
+    final input   = List.generate(1, (_) => List.generate(380, (y) => List.generate(380, (x) {
+      final p = resized.getPixel(x, y);
+      return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
+    })));
     final output = List.filled(labels.length, 0.0).reshape([1, labels.length]);
     _interpreter!.run(input, output);
     final scores  = List<double>.from(output[0] as List);
-    final indexed = List.generate(scores.length, (i) => i)
-      ..sort((a, b) => scores[b].compareTo(scores[a]));
-    final topIdx   = indexed[0];
-    final topLabel = labels[topIdx];
-    final top3 = indexed.take(3).map((i) => {
+    final indexed = List.generate(scores.length, (i) => i)..sort((a, b) => scores[b].compareTo(scores[a]));
+    final topIdx  = indexed[0];
+    final top3    = indexed.take(3).map((i) => {
       'label': labels[i], 'confidence': scores[i],
       'confidenceText': '${(scores[i]*100).toStringAsFixed(1)}%',
       'referenceImage': referenceImages[labels[i]] ?? '',
     }).toList();
     return {
-      'label': topLabel, 'confidence': scores[topIdx],
+      'label': labels[topIdx], 'confidence': scores[topIdx],
       'confidenceText': '${(scores[topIdx]*100).toStringAsFixed(1)}%',
-      'referenceImage': referenceImages[topLabel] ?? '',
+      'referenceImage': referenceImages[labels[topIdx]] ?? '',
       'top3': top3, 'allScores': scores,
     };
   }
@@ -104,16 +96,23 @@ class BirdClassifier {
 
 // ─────────────────────────────────────────────────────────────────
 // MODELO BIRDNET — 16 especies Tolima
+// Input real: [1, 144, 144, 1]  Output real: [1, 6522]
 // ─────────────────────────────────────────────────────────────────
 class BirdNetClassifier {
   Interpreter? _interpreter;
-  bool _isLoaded  = false;
-  int  _inputH    = 224;
-  int  _inputW    = 224;
-  int  _inputC    = 3;
-  int  _numClasses = 0;
-  List<int> _rawInShape  = [];
-  List<int> _rawOutShape = [];
+  bool _isLoaded = false;
+
+  // Shapes reales confirmados por log
+  static const int _H = 144;
+  static const int _W = 144;
+  static const int _C = 1;          // grayscale
+  static const int _numClasses = 6522;
+
+  // Info de diagnóstico expuesta a la UI
+  String infoInput  = '';
+  String infoOutput = '';
+  String infoTop3   = '';
+  String infoError  = '';
 
   static const List<String> _tolimalabels = [
     'Aburria aburri_Wattled Guan',
@@ -158,147 +157,82 @@ class BirdNetClassifier {
       _interpreter = await Interpreter.fromAsset(
         'lib/assets/models/BirdNET_6K_GLOBAL_MODEL.tflite',
       );
-
-      _rawInShape  = _interpreter!.getInputTensor(0).shape;
-      _rawOutShape = _interpreter!.getOutputTensor(0).shape;
-
-      print('[BIRDNET] ✓ Modelo cargado.');
-      print('[BIRDNET]    Num inputs      : ${_interpreter!.getInputTensors().length}');
-      print('[BIRDNET]    Num outputs     : ${_interpreter!.getOutputTensors().length}');
-      print('[BIRDNET]    Input  shape    : $_rawInShape');
-      print('[BIRDNET]    Input  dtype    : ${_interpreter!.getInputTensor(0).type}');
-      print('[BIRDNET]    Output shape    : $_rawOutShape');
-      print('[BIRDNET]    Output dtype    : ${_interpreter!.getOutputTensor(0).type}');
-
-      // Parsear input shape
-      if (_rawInShape.length == 4) {
-        // [1, H, W, C]
-        _inputH = _rawInShape[1];
-        _inputW = _rawInShape[2];
-        _inputC = _rawInShape[3];
-        print('[BIRDNET]    Modo            : imagen [H=$_inputH W=$_inputW C=$_inputC]');
-      } else if (_rawInShape.length == 2) {
-        // [1, N] → flat (espectrograma aplanado)
-        _inputH = _rawInShape[1];
-        _inputW = 1;
-        _inputC = 1;
-        print('[BIRDNET]    Modo            : flat vector [N=${_rawInShape[1]}]');
-      } else {
-        print('[BIRDNET]    ADVERTENCIA     : shape desconocido $_rawInShape');
-      }
-
-      _numClasses = _rawOutShape.length > 1 ? _rawOutShape[1] : _rawOutShape[0];
-      print('[BIRDNET]    Clases totales  : $_numClasses');
+      final inShape  = _interpreter!.getInputTensor(0).shape;
+      final outShape = _interpreter!.getOutputTensor(0).shape;
+      infoInput  = 'Input : $inShape  dtype: ${_interpreter!.getInputTensor(0).type}';
+      infoOutput = 'Output: $outShape  dtype: ${_interpreter!.getOutputTensor(0).type}';
+      print('[BIRDNET] \u2713 Modelo cargado.');
+      print('[BIRDNET]    $infoInput');
+      print('[BIRDNET]    $infoOutput');
+      print('[BIRDNET]    Usando H=$_H W=$_W C=$_C clases=$_numClasses');
       _isLoaded = true;
-
-    } catch (e, stack) {
+    } catch (e, st) {
       _isLoaded = false;
-      print('[BIRDNET] ✗ Error al cargar: $e');
-      print('[BIRDNET]    StackTrace: $stack');
+      infoError = 'Error al cargar:\n$e';
+      print('[BIRDNET] \u2717 $infoError');
+      print('[BIRDNET]    $st');
       rethrow;
     }
   }
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
-    if (!_isLoaded || _interpreter == null) {
-      throw Exception('Modelo BirdNET no cargado.');
-    }
+    if (!_isLoaded || _interpreter == null) throw Exception('Modelo BirdNET no cargado.');
 
-    print('[BIRDNET] --- Iniciando clasificaci\u00f3n ---');
-    print('[BIRDNET]    Archivo     : ${imageFile.path}');
-    print('[BIRDNET]    Input shape : $_rawInShape');
-    print('[BIRDNET]    Output shape: $_rawOutShape');
-    print('[BIRDNET]    H=$_inputH W=$_inputW C=$_inputC clases=$_numClasses');
+    infoError = '';
+    infoTop3  = '';
+    print('[BIRDNET] --- Clasificando ---');
 
     try {
-      final rawImage = img.decodeImage(await imageFile.readAsBytes())!;
-      print('[BIRDNET]    Imagen original : ${rawImage.width}x${rawImage.height}');
+      final raw     = img.decodeImage(await imageFile.readAsBytes())!;
+      final resized = img.copyResize(raw, width: _W, height: _H);
+      print('[BIRDNET]    Imagen: ${raw.width}x${raw.height} → ${_W}x${_H} grayscale');
 
-      dynamic input;
-
-      if (_rawInShape.length == 2) {
-        // Modelo espera vector plano [1, N]
-        // Redimensionamos a NxN escala de grises y aplanamos
-        final side   = (_rawInShape[1] as num).toDouble();
-        final sqSide = side.isFinite ? side.ceil() : 144;
-        final resized = img.copyResize(rawImage, width: sqSide, height: 1);
-        final flat = List.generate(_rawInShape[1], (x) {
-          if (x < resized.width) {
-            final p = resized.getPixel(x, 0);
-            return (p.r * 0.299 + p.g * 0.587 + p.b * 0.114) / 255.0;
-          }
-          return 0.0;
-        });
-        input = [flat];
-        print('[BIRDNET]    Input construido: flat vector [${flat.length}]');
-
-      } else {
-        // Modelo espera imagen [1, H, W, C]
-        final resized = img.copyResize(rawImage, width: _inputW, height: _inputH);
-        if (_inputC == 1) {
-          input = List.generate(1, (_) =>
-            List.generate(_inputH, (y) =>
-              List.generate(_inputW, (x) {
-                final p    = resized.getPixel(x, y);
-                final gray = (p.r * 0.299 + p.g * 0.587 + p.b * 0.114) / 255.0;
-                return [gray];
-              })));
-          print('[BIRDNET]    Input construido: [$_inputH x $_inputW x 1] grayscale');
-        } else {
-          input = List.generate(1, (_) =>
-            List.generate(_inputH, (y) =>
-              List.generate(_inputW, (x) {
-                final p = resized.getPixel(x, y);
-                return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
-              })));
-          print('[BIRDNET]    Input construido: [$_inputH x $_inputW x 3] RGB');
-        }
-      }
+      // Input [1, 144, 144, 1] grayscale float32
+      final input = List.generate(1, (_) =>
+        List.generate(_H, (y) =>
+          List.generate(_W, (x) {
+            final p    = resized.getPixel(x, y);
+            final gray = (p.r * 0.299 + p.g * 0.587 + p.b * 0.114) / 255.0;
+            return [gray];
+          })
+        )
+      );
 
       final output = List.filled(_numClasses, 0.0).reshape([1, _numClasses]);
       print('[BIRDNET]    Ejecutando inference...');
       _interpreter!.run(input, output);
-      print('[BIRDNET]    ✓ Inference OK');
+      print('[BIRDNET]    \u2713 Inference OK');
 
       final allScores = List<double>.from(output[0] as List);
-      final n = _tolimalabels.length < allScores.length
-          ? _tolimalabels.length
-          : allScores.length;
+      final n = _tolimalabels.length.clamp(0, allScores.length);
+      final tolimaScores = { for (int i = 0; i < n; i++) _tolimalabels[i]: allScores[i] };
+      final sorted = tolimaScores.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
-      final Map<String, double> tolimaScores = {
-        for (int i = 0; i < n; i++) _tolimalabels[i]: allScores[i],
-      };
-
-      final sorted = tolimaScores.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      print('[BIRDNET]    Top 3 resultados:');
-      for (int i = 0; i < 3 && i < sorted.length; i++) {
-        print('[BIRDNET]      ${i+1}. ${sorted[i].key} → ${(sorted[i].value*100).toStringAsFixed(2)}%');
-      }
+      // Guardar top3 para el diálogo
+      infoTop3 = sorted.take(3).indexed.map((e) =>
+        '${e.$1+1}. ${e.$2.key}\n   → ${(e.$2.value*100).toStringAsFixed(2)}%'
+      ).join('\n');
+      print('[BIRDNET]    Top 3:\n$infoTop3');
 
       final topLabel = sorted[0].key;
       final topScore = sorted[0].value;
-
       final top3 = sorted.take(3).map((e) => {
-        'label':          e.key,
-        'confidence':     e.value,
-        'confidenceText': '${(e.value * 100).toStringAsFixed(1)}%',
+        'label': e.key, 'confidence': e.value,
+        'confidenceText': '${(e.value*100).toStringAsFixed(1)}%',
         'referenceImage': referenceImages[e.key] ?? '',
       }).toList();
 
       return {
-        'label':          topLabel,
-        'confidence':     topScore,
-        'confidenceText': '${(topScore * 100).toStringAsFixed(1)}%',
+        'label': topLabel, 'confidence': topScore,
+        'confidenceText': '${(topScore*100).toStringAsFixed(1)}%',
         'referenceImage': referenceImages[topLabel] ?? '',
-        'top3':           top3,
-        'allScores':      allScores,
+        'top3': top3, 'allScores': allScores,
       };
 
-    } catch (e, stack) {
-      print('[BIRDNET] ✗ Error en classify(): $e');
-      print('[BIRDNET]    StackTrace: $stack');
+    } catch (e, st) {
+      infoError = '$e';
+      print('[BIRDNET] \u2717 Error en classify(): $e');
+      print('[BIRDNET]    $st');
       rethrow;
     }
   }
