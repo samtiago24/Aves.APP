@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.aves.avesflutter"
+    namespace = "com.example.aves_app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aves.avesflutter"
-        minSdk = 23 // Firebase requiere minSdk >= 23
+        minSdk = flutter.minSdkVersion // Firebase requiere minSdk >= 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
