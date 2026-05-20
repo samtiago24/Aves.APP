@@ -1,454 +1,363 @@
-# 🦜 Aves.APP — Identificador de Aves con IA
+# 🦜 Aves App — Identificador de Aves del Tolima
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white"/>
-  <img src="https://img.shields.io/badge/TFLite-Model-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white"/>
-  <img src="https://img.shields.io/badge/SQLite-Local%20DB-003B57?style=for-the-badge&logo=sqlite&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Google%20Maps-Avistamientos-4285F4?style=for-the-badge&logo=google-maps&logoColor=white"/>
-</p>
+Aplicación móvil Android desarrollada en **Flutter** para la identificación de especies de aves del departamento del Tolima, Colombia, usando modelos de inteligencia artificial (TensorFlow Lite y BirdNET).
 
-> Aplicación móvil desarrollada en **Flutter** que permite identificar especies de aves mediante inteligencia artificial (TensorFlow Lite), registrar avistamientos con geolocalización y explorar un catálogo visual de especies.
-
----
-
-## 👨‍💻 Autores
-
-| Nombre | Rol |
-|---|---|
-| **Santiago Lopez** | Desarrollador principal |
-| **Sebastian Castro** | Desarrollador principal |
+> **Autores:** Santiago Lopez · Sebastian Castro  
+> **Institución:** Universidad — Proyecto de grado  
+> **Versión:** 1.0.0+1  
+> **Plataforma:** Android (mínimo SDK 23 / Android 6.0)
 
 ---
 
 ## 📋 Tabla de Contenidos
 
-- [Descripción General](#-descripción-general)
-- [Características Principales](#-características-principales)
-- [Arquitectura del Proyecto](#-arquitectura-del-proyecto)
-- [Estructura de Carpetas](#-estructura-de-carpetas)
-- [Especies Soportadas](#-especies-soportadas)
-- [Requisitos Previos](#-requisitos-previos)
-- [Instalación y Configuración](#-instalación-y-configuración)
-- [Uso de la Aplicación](#-uso-de-la-aplicación)
-- [Servicios Internos](#-servicios-internos)
-- [Base de Datos Local](#-base-de-datos-local)
-- [Modelo de IA](#-modelo-de-ia)
-- [Dependencias](#-dependencias)
-- [Plataformas Soportadas](#-plataformas-soportadas)
-- [Contribuir](#-contribuir)
+- [Características](#-características)
+- [Requisitos previos](#-requisitos-previos)
+- [Instalación paso a paso](#-instalación-paso-a-paso)
+- [Configuración de Firebase](#-configuración-de-firebase)
+- [Estructura del proyecto](#-estructura-del-proyecto)
+- [Modelos de IA](#-modelos-de-ia)
+- [Especies soportadas](#-especies-soportadas)
+- [Permisos necesarios](#-permisos-necesarios)
+- [Solución de problemas](#-solución-de-problemas)
 
 ---
 
-## 📖 Descripción General
+## ✨ Características
 
-**Aves.APP** es una aplicación multiplataforma construida con Flutter que combina visión por computadora, geolocalización y almacenamiento local para ofrecer una experiencia completa de identificación y seguimiento de aves. El usuario puede tomar una foto o seleccionar una imagen de su galería, y la app clasifica la especie utilizando un modelo **TensorFlow Lite** (`model_aves.tflite`) entrenado específicamente para reconocer 16 especies de aves.
-
-Los resultados incluyen el nombre de la especie, el porcentaje de confianza, las **Top 3 especies candidatas**, y una imagen de referencia. Además, cada identificación puede guardarse como un avistamiento geolocalizado en la base de datos local (SQLite), y visualizarse en un mapa interactivo con **Google Maps**.
-
----
-
-## ✨ Características Principales
-
-| Funcionalidad | Descripción |
+| Función | Descripción |
 |---|---|
-| 📸 Identificación por cámara | Captura fotos directamente con la cámara del dispositivo |
-| 🖼️ Identificación desde galería | Selecciona imágenes existentes para clasificar |
-| 🤖 Clasificación con IA | Modelo TFLite con entrada 380×380px y 16 clases |
-| 🥇 Top 3 resultados | Muestra las 3 especies más probables con su porcentaje |
-| 📍 Geolocalización | Registra la ubicación GPS del avistamiento automáticamente |
-| 🗺️ Mapa de avistamientos | Visualiza todos los avistamientos en Google Maps |
-| 📚 Catálogo de especies | Explora información detallada de cada especie |
-| 🌍 Distribución geográfica | Mapa de distribución natural por especie |
-| 🌙 Tema claro/oscuro | Soporte completo para modo oscuro y claro (Material 3) |
-| 💾 Almacenamiento local | Base de datos SQLite con UUID único por registro |
-| ☁️ Sincronización en la nube | Sube avistamientos a Firebase Firestore automáticamente |
+| 🔍 Identificación por foto | Toma o sube una foto y la IA identifica el ave |
+| 🤖 Doble modelo de IA | Modelo Original (16 aves) + BirdNET Tolima (16 aves) |
+| 🗺️ Mapa de distribución | Ver dónde encontrar el ave dentro de Ibagué |
+| 💾 Historial de avistamientos | Guarda fecha, especie, confianza y ubicación GPS |
+| ☁️ Sincronización en la nube | Respaldo automático en Firebase Firestore |
+| 📖 Catálogo de especies | Ficha completa de las 32 especies con hábitat y dieta |
+| 📍 GPS integrado | Registra la ubicación exacta de cada avistamiento |
 
 ---
 
-## 🏗️ Arquitectura del Proyecto
+## 🛠️ Requisitos previos
 
-El proyecto sigue una arquitectura en **capas**, separando responsabilidades claramente:
+Antes de clonar el proyecto asegúrate de tener instalado:
 
+### 1. Flutter SDK
+```bash
+# Verificar instalación
+flutter --version
+# Se requiere Flutter 3.x o superior (SDK ^3.11.4)
 ```
-┌─────────────────────────────────────────┐
-│           Presentation Layer            │
-│  (UI Screens — Flutter Widgets)         │
-├─────────────────────────────────────────┤
-│             Core Layer                  │
-│  (Navegación principal, tema global)    │
-├─────────────────────────────────────────┤
-│            Services Layer               │
-│  (Clasificación IA, BD, Ubicación)      │
-├─────────────────────────────────────────┤
-│              Data Layer                 │
-│  (Catálogo estático, ubicaciones)       │
-└─────────────────────────────────────────┘
+👉 Descarga: https://docs.flutter.dev/get-started/install/windows
+
+### 2. Android Studio
+- Versión recomendada: **Android Studio Ladybug 2024** o superior
+- Instalar durante la configuración:
+  - Android SDK Platform 33 o superior
+  - Android Virtual Device (AVD) o usar dispositivo físico
+
+### 3. Java Development Kit (JDK)
+```bash
+java -version
+# Se requiere JDK 17 o superior
 ```
 
-- **Presentation**: Todas las pantallas visuales que el usuario ve e interactúa.
-- **Core**: Lógica central de navegación y configuración global del tema.
-- **Services**: Servicios reutilizables para IA, base de datos SQLite y GPS.
-- **Data**: Datos estáticos del catálogo de especies y ubicaciones geográficas.
-
----
-
-## 📁 Estructura de Carpetas
-
+### 4. Git
+```bash
+git --version
 ```
-Aves.APP/
-├── lib/
-│   ├── main.dart                          # Punto de entrada, configuración de tema
-│   ├── Core/
-│   │   └── UI/
-│   │       └── MainNavigationScreen.dart  # Barra de navegación principal
-│   ├── Presentation/
-│   │   └── UI/
-│   │       ├── InicioScreen.dart          # Pantalla de bienvenida
-│   │       ├── IdentificarAveScreen.dart  # Identificación con cámara/galería
-│   │       ├── CatalogoScreen.dart        # Catálogo de especies
-│   │       ├── DetalleEspecieScreen.dart  # Detalle de una especie
-│   │       ├── MapaAvistamientosScreen.dart # Mapa Google Maps con avistamientos
-│   │       └── DistribucionAveScreen.dart  # Mapa de distribución de especie
-│   ├── Services/
-│   │   ├── classifier_service.dart        # Clasificador TFLite (BirdClassifier)
-│   │   ├── database_service.dart          # SQLite (avistamientos locales)
-│   │   ├── location_service.dart          # GPS y geolocalización
-│   │   └── sync_service.dart              # Sincronización Firebase (RF09)
-│   ├── Data/
-│   │   ├── catalogo_especies.dart         # Datos estáticos del catálogo
-│   │   └── species_locations.dart         # Coordenadas de distribución por especie
-│   └── assets/
-│       ├── models/
-│       │   ├── model_aves.tflite          # Modelo de IA entrenado
-│       │   └── labels.txt                 # Etiquetas de clases
-│       └── images/
-│           └── *.jpg                      # Imágenes de referencia por especie
-├── android/                               # Configuración nativa Android
-├── ios/                                   # Configuración nativa iOS
-├── web/                                   # Configuración para web
-├── windows/, linux/, macos/               # Configuración para escritorio
-├── pubspec.yaml                           # Dependencias del proyecto
-└── analysis_options.yaml                  # Reglas de análisis de código
+
+### 5. Verificar entorno Flutter completo
+```bash
+flutter doctor
+# Todos los ítems deben mostrar ✓ (excepto Xcode si estás en Windows)
 ```
 
 ---
 
-## 🐦 Especies Soportadas
+## 🚀 Instalación paso a paso
 
-El modelo reconoce **16 especies de aves**:
-
-| # | Especie | # | Especie |
-|---|---------|---|---------|
-| 1 | Avefría tero | 9 | Luis Pico Grueso |
-| 2 | Baltimore Oriole | 10 | Papamoscas rayado chico |
-| 3 | Bienteveo Común | 11 | Saltador Gris |
-| 4 | Canario coronado | 12 | Saltador garganta ocre |
-| 5 | Colibrí Cola Canela | 13 | Tangara Azulgris |
-| 6 | Fiofío Silbón | 14 | Torcaza Colorada |
-| 7 | Garza dedos dorados | 15 | Vireo Ojos Rojos |
-| 8 | Jacana | 16 | Zorzal sabia |
-
----
-
-## ✅ Requisitos Previos
-
-Antes de clonar y ejecutar el proyecto, asegúrate de tener instalado:
-
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) `^3.x` (compatible con Dart `^3.11.4`)
-- [Android Studio](https://developer.android.com/studio) o [VS Code](https://code.visualstudio.com/) con extensión Flutter
-- Un dispositivo físico Android/iOS **o** un emulador configurado
-- **Google Maps API Key** (necesaria para los mapas)
-- Git
-
-> ⚠️ **Nota:** El modelo TFLite y las imágenes de referencia deben estar presentes en `lib/assets/models/` y `lib/assets/images/` respectivamente. Estos archivos de gran tamaño pueden no estar incluidos en el repositorio.
-
----
-
-## 🚀 Instalación y Configuración
-
-### 1. Clonar el repositorio
-
+### Paso 1 — Clonar el repositorio
 ```bash
 git clone https://github.com/samtiago24/Aves.APP.git
 cd Aves.APP
 ```
 
-### 2. Instalar dependencias
-
+### Paso 2 — Instalar dependencias
 ```bash
 flutter pub get
 ```
 
-### 3. Configurar la API Key de Google Maps
+### Paso 3 — Agregar los assets requeridos
 
-#### Android
-Abre `android/app/src/main/AndroidManifest.xml` y agrega tu clave dentro del bloque `<application>`:
+Los archivos de modelo y las imágenes **no están en el repositorio** por su tamaño. Debes agregarlos manualmente:
 
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="TU_API_KEY_AQUI"/>
+#### 📁 Estructura de assets esperada:
+```
+lib/
+└── assets/
+    ├── models/
+    │   ├── BirdNET_6K_GLOBAL_MODEL.tflite   ← Modelo BirdNET (requerido)
+    │   ├── model_aves.tflite                ← Modelo original (opcional)
+    │   └── labels.txt                       ← Etiquetas del modelo
+    └── images/
+        ├── avefria_terocsv.jpg
+        ├── baltimore_oriole.jpg
+        ├── bienteveo_comun.jpg
+        ├── ... (32 imágenes de referencia)
 ```
 
-#### iOS
-Abre `ios/Runner/AppDelegate.swift` y agrega:
+> 💡 El modelo `BirdNET_6K_GLOBAL_MODEL.tflite` se puede obtener desde el repositorio oficial de BirdNET: https://github.com/kahst/BirdNET-Analyzer
 
-```swift
-GMSServices.provideAPIKey("TU_API_KEY_AQUI")
-```
+### Paso 4 — Configurar Firebase
 
-### 4. Agregar permisos en Android
+Ver sección [Configuración de Firebase](#-configuración-de-firebase) más abajo.
 
-En `android/app/src/main/AndroidManifest.xml`, asegúrate de tener:
+### Paso 5 — Conectar dispositivo o emulador
 
-```xml
-<uses-permission android:name="android.permission.CAMERA"/>
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-```
-
-### 5. Agregar permisos en iOS
-
-En `ios/Runner/Info.plist`:
-
-```xml
-<key>NSCameraUsageDescription</key>
-<string>Se necesita la cámara para identificar aves</string>
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Se necesita la ubicación para registrar avistamientos</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Se necesita acceso a fotos para identificar aves</string>
-```
-
-### 6. Verificar assets del modelo
-
-Asegúrate de que los siguientes archivos existen:
-
-```
-lib/assets/models/model_aves.tflite
-lib/assets/models/labels.txt
-lib/assets/images/avefria_terocsv.jpg
-lib/assets/images/baltimore_oriole.jpg
-... (una imagen por cada especie)
-```
-
-### 7. Ejecutar la aplicación
-
+**Opción A — Dispositivo físico Android:**
+1. Activar **Opciones de desarrollador** en el teléfono
+2. Activar **Depuración USB**
+3. Conectar el cable USB
+4. Verificar conexión:
 ```bash
-# Verificar dispositivos disponibles
 flutter devices
+```
 
-# Ejecutar en un dispositivo específico
-flutter run
+**Opción B — Emulador:**
+```bash
+# Listar emuladores disponibles
+flutter emulators
+# Iniciar un emulador
+flutter emulators --launch <nombre_emulador>
+```
 
-# Compilar APK de producción (Android)
+### Paso 6 — Ejecutar la aplicación
+```bash
+# Modo debug (recomendado para desarrollo)
+flutter run --debug
+
+# Modo release (para pruebas de rendimiento)
+flutter run --release
+```
+
+### Paso 7 — Generar APK para instalar en dispositivo
+```bash
 flutter build apk --release
-
-# Compilar para iOS
-flutter build ios --release
+# El APK quedará en: build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ---
 
-## 📱 Uso de la Aplicación
+## 🔥 Configuración de Firebase
 
-### Pantalla de Inicio (`InicioScreen`)
-La pantalla principal da la bienvenida al usuario con accesos directos a las funcionalidades principales. Desde aquí se puede navegar a cualquier sección de la app.
+La app usa Firebase para sincronización en la nube. Sigue estos pasos:
 
-### Identificar un Ave (`IdentificarAveScreen`)
-1. Toca el botón **"Cámara"** para tomar una foto en tiempo real, o **"Galería"** para seleccionar una imagen existente.
-2. La imagen se procesa automáticamente: es redimensionada a **380×380 px** y normalizada (valores 0–1 por canal RGB).
-3. El modelo TFLite ejecuta la inferencia y retorna los **scores** para las 16 clases.
-4. Se muestran los **Top 3 resultados** con nombre de especie, porcentaje de confianza e imagen de referencia.
-5. Si deseas guardar el avistamiento, toca **"Guardar"**. La app captura automáticamente las coordenadas GPS actuales y almacena el registro en la base de datos local con un ID UUID único.
+### 1. Crear proyecto en Firebase Console
+1. Ir a https://console.firebase.google.com
+2. Crear nuevo proyecto → nombre: `aves-app-tolima`
+3. Desactivar Google Analytics (opcional)
 
-### Catálogo de Especies (`CatalogoScreen` + `DetalleEspecieScreen`)
-- Explora la lista completa de las 16 especies con imagen y nombre.
-- Toca cualquier especie para ver su ficha detallada: descripción, hábitat, comportamiento y más.
-- Desde el detalle, puedes acceder al mapa de **distribución geográfica** de la especie.
+### 2. Registrar app Android
+1. En Firebase Console → **Agregar app → Android**
+2. Package name: `com.example.aves_app`
+3. Descargar `google-services.json`
 
-### Mapa de Avistamientos (`MapaAvistamientosScreen`)
-- Visualiza en Google Maps todos los avistamientos guardados localmente.
-- Cada pin representa un avistamiento con la especie identificada y la fecha.
-- Toca un marcador para ver el detalle del avistamiento.
-
-### Distribución del Ave (`DistribucionAveScreen`)
-- Muestra en un mapa la distribución geográfica conocida de la especie seleccionada.
-- Los datos de ubicación están definidos estáticamente en `lib/Data/species_locations.dart`.
-
-### Cambiar Tema (Claro / Oscuro)
-La app soporta **Material 3** con tema claro (fondo `#EEEEEE`, semilla `blueGrey`) y oscuro (fondo `#121212`). El `ValueNotifier<ThemeMode> themeNotifier` en `main.dart` gestiona el cambio de tema globalmente sin necesidad de reiniciar la app.
-
----
-
-## ⚙️ Servicios Internos
-
-### `BirdClassifier` (`classifier_service.dart`)
-
-Gestiona la carga y ejecución del modelo TFLite:
-
-```dart
-final classifier = BirdClassifier();
-await classifier.loadModel(); // Carga el modelo desde assets
-
-final result = await classifier.classify(imageFile);
-// result = {
-//   'label': 'Tangara Azulgris',
-//   'confidence': 0.92,
-//   'confidenceText': '92.0%',
-//   'referenceImage': 'lib/assets/images/tangara_azulgris.jpg',
-//   'top3': [...],
-//   'allScores': [...]
-// }
-
-classifier.dispose(); // Libera recursos del intérprete
+### 3. Colocar el archivo de configuración
+```
+android/
+└── app/
+    └── src/
+        └── google-services.json   ← Aquí va el archivo descargado
 ```
 
-**Pipeline de inferencia:**
-1. Decodifica la imagen con el paquete `image`
-2. Redimensiona a `380×380` px
-3. Normaliza cada pixel a rango `[0.0, 1.0]` por canal R, G, B
-4. Construye tensor de entrada `[1, 380, 380, 3]`
-5. Ejecuta inferencia con `_interpreter.run(input, output)`
-6. Ordena scores y extrae Top 3
+### 4. Habilitar Firestore
+1. En Firebase Console → **Firestore Database**
+2. Crear base de datos → Modo de prueba
+3. Región recomendada: `us-central1`
+
+### 5. Reglas de Firestore (modo desarrollo)
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
 
 ---
 
-### `DatabaseService` (`database_service.dart`)
+## 📁 Estructura del proyecto
 
-CRUD local con SQLite para la tabla `avistamientos`:
+```
+aves_app/
+├── android/                        # Configuración Android nativa
+│   └── app/
+│       ├── src/google-services.json
+│       └── build.gradle.kts        # applicationId: com.example.aves_app
+├── lib/
+│   ├── main.dart                   # Punto de entrada
+│   ├── assets/
+│   │   ├── models/                 # Modelos TFLite
+│   │   └── images/                 # Fotos de referencia de especies
+│   ├── Data/
+│   │   ├── catalogo_especies.dart  # Info de las 32 especies
+│   │   └── species_locations.dart  # Coordenadas GPS en Ibagué
+│   ├── Presentation/
+│   │   └── UI/
+│   │       ├── IdentificarAveScreen.dart   # Pantalla de identificación
+│   │       ├── DistribucionAveScreen.dart  # Mapa de distribución
+│   │       ├── CatalogoScreen.dart         # Catálogo de especies
+│   │       └── HistorialScreen.dart        # Avistamientos guardados
+│   └── Services/
+│       ├── classifier_service.dart  # BirdClassifier + BirdNetClassifier
+│       ├── database_service.dart    # SQLite local
+│       ├── firestore_service.dart   # Firebase Firestore
+│       └── location_service.dart   # GPS
+├── pubspec.yaml                    # Dependencias del proyecto
+└── README.md
+```
 
-| Campo | Tipo | Descripción |
+---
+
+## 🤖 Modelos de IA
+
+La app soporta dos modelos de clasificación seleccionables desde la UI:
+
+### Modelo Original (`model_aves.tflite`)
+- **Clases:** 16 especies entrenadas manualmente
+- **Input:** imagen 380×380 px RGB
+- **Estado:** Opcional — se habilita solo si el archivo existe en assets
+
+### BirdNET Tolima (`BirdNET_6K_GLOBAL_MODEL.tflite`)
+- **Base:** BirdNET-Analyzer (Cornell Lab of Ornithology)
+- **Clases:** 16 especies filtradas del Tolima
+- **Input:** imagen 380×380 px RGB
+- **Estado:** ✅ Modelo principal (siempre activo)
+
+**Umbral de confianza:** `60%` — por debajo se muestra "No se detectó un ave".
+
+---
+
+## 🦅 Especies soportadas
+
+### Modelo Original — 16 especies
+| # | Nombre común | Nombre científico |
 |---|---|---|
-| `id` | TEXT (PK) | UUID v4 único |
-| `especie` | TEXT | Nombre de la especie identificada |
-| `confianza` | REAL | Score de confianza (0.0 – 1.0) |
-| `fotoPath` | TEXT | Ruta local de la foto |
-| `latitud` | REAL | Coordenada GPS |
-| `longitud` | REAL | Coordenada GPS |
-| `fecha` | TEXT | ISO 8601 timestamp |
-| `sincronizado` | INTEGER | Flag de sincronización (0/1) |
+| 1 | Avefría teroCSV | *Vanellus chilensis* |
+| 2 | Baltimore Oriole | *Icterus galbula* |
+| 3 | Bienteveo Común | *Pitangus sulphuratus* |
+| 4 | Canario coronado | *Sicalis flaveola* |
+| 5 | Colibrí Cola Canela | *Amazilia tzacatl* |
+| 6 | Fiofío Silbón | *Elaenia flavogaster* |
+| 7 | Garza dedos dorados | *Egretta thula* |
+| 8 | Jacana | *Jacana jacana* |
+| 9 | Luis Pico Grueso | *Megarynchus pitangua* |
+| 10 | Papamoscas rayado chico | *Pyrocephalus rubinus* |
+| 11 | Saltador Gris | *Saltator coerulescens* |
+| 12 | Saltador garganta ocre | *Saltator maximus* |
+| 13 | Tangara Azulgris | *Thraupis episcopus* |
+| 14 | Torcaza Colorada | *Patagioenas cayennensis* |
+| 15 | Vireo Ojos Rojos | *Vireo olivaceus* |
+| 16 | Zorzal sabia | *Turdus ignobilis* |
 
-**Métodos disponibles:**
+### BirdNET Tolima — 16 especies
+| # | Nombre científico | Nombre en inglés |
+|---|---|---|
+| 1 | *Aburria aburri* | Wattled Guan |
+| 2 | *Accipiter bicolor* | Bicolored Hawk |
+| 3 | *Adelomyia melanogenys* | Speckled Hummingbird |
+| 4 | *Agelaioides badius* | Grayish Baywing |
+| 5 | *Agelaius phoeniceus* | Red-winged Blackbird |
+| 6 | *Aglaiocercus kingii* | Long-tailed Sylph |
+| 7 | *Actitis macularius* | Spotted Sandpiper |
+| 8 | *Aegolius harrisii* | Buff-fronted Owl |
+| 9 | *Aeronautes montivagus* | White-tipped Swift |
+| 10 | *Accipiter striatus* | Sharp-shinned Hawk |
+| 11 | *Acropternis orthonyx* | Ocellated Tapaculo |
+| 12 | *Accipiter superciliosus* | Tiny Hawk |
+| 13 | *Aglaiocercus coelestis* | Violet-tailed Sylph |
+| 14 | *Accipiter erythronemius* | Rufous-thighed Hawk |
+| 15 | *Accipiter poliogaster* | Gray-bellied Hawk |
+| 16 | *Acanthidops bairdi* | Peg-billed Finch |
 
-```dart
-// Guardar nuevo avistamiento
-final id = await DatabaseService.guardarAvistamiento(
-  especie: 'Jacana',
-  confianza: 0.88,
-  fotoPath: '/ruta/foto.jpg',
-  latitud: 4.6097,
-  longitud: -74.0817,
-);
+---
 
-// Obtener todos los avistamientos
-final lista = await DatabaseService.obtenerTodos();
+## 🔐 Permisos necesarios
 
-// Obtener solo no sincronizados
-final pendientes = await DatabaseService.obtenerNosincronizados();
+Los siguientes permisos se declaran en `AndroidManifest.xml`:
 
-// Marcar como sincronizado
-await DatabaseService.marcarSincronizado(id);
+| Permiso | Uso |
+|---|---|
+| `CAMERA` | Tomar fotos para identificación |
+| `READ_EXTERNAL_STORAGE` | Seleccionar fotos de galería |
+| `ACCESS_FINE_LOCATION` | GPS para registrar avistamientos |
+| `ACCESS_COARSE_LOCATION` | Ubicación aproximada |
+| `INTERNET` | Sincronización con Firebase |
 
-// Eliminar registro
-await DatabaseService.eliminar(id);
+---
+
+## 🔧 Solución de problemas
+
+### ❌ `No matching client found for package name`
+```
+Asegúrate de que el package name en google-services.json sea:
+"package_name": "com.example.aves_app"
+```
+
+### ❌ `Unable to load asset: lib/assets/models/model_aves.tflite`
+```
+Este es el modelo opcional. La app funciona sin él usando BirdNET.
+Si tienes el archivo, agrégalo a lib/assets/models/ y decláralo en pubspec.yaml.
+```
+
+### ❌ `Gradle task assembleDebug failed`
+```bash
+flutter clean
+flutter pub get
+flutter run --debug
+```
+
+### ❌ `flutter doctor` muestra errores de licencias
+```bash
+flutter doctor --android-licenses
+# Aceptar todas las licencias con 'y'
+```
+
+### ❌ La app no encuentra el emulador
+```bash
+flutter devices          # Ver dispositivos conectados
+adb devices              # Verificar con ADB
+adb kill-server          # Reiniciar ADB si es necesario
+adb start-server
+```
+
+### ❌ Error de versión de Java con Gradle
+Asegúrate de tener **JDK 17** configurado en Android Studio:
+> File → Project Structure → SDK Location → Gradle JDK → jbr-17
+
+---
+
+## 📦 Dependencias principales
+
+```yaml
+flutter: sdk
+tflite_flutter: ^0.12.1       # Inferencia con modelos TFLite
+image: ^4.1.7                 # Procesamiento de imágenes
+image_picker: ^1.2.1          # Cámara y galería
+google_maps_flutter: ^2.17.0  # Mapa de distribución
+geolocator: ^14.0.2           # GPS
+sqflite: ^2.4.2               # Base de datos local
+firebase_core: ^3.6.0         # Firebase
+cloud_firestore: ^5.4.4       # Base de datos en la nube
+connectivity_plus: ^6.0.3     # Estado de conexión
 ```
 
 ---
 
-### `SyncService` (`sync_service.dart`)
+## 📄 Licencia
 
-Sincronización automática con Firebase Firestore (RF09):
-
-- Detecta conexión a internet con `connectivity_plus`
-- Sube todos los avistamientos con `sincronizado = 0` a la colección `avistamientos` en Firestore
-- Marca cada registro como sincronizado en la BD local tras subirlo exitosamente
-- Se activa automáticamente al detectar conexión desde `main.dart`
-
----
-
-### `LocationService` (`location_service.dart`)
-
-Abstrae el acceso a GPS del dispositivo usando el paquete `geolocator`:
-
-- Solicita permisos de ubicación al usuario
-- Retorna latitud y longitud actuales
-- Maneja errores si el GPS está desactivado o los permisos son denegados
-
----
-
-## 💾 Base de Datos Local
-
-La app utiliza **SQLite** (a través de `sqflite`) para persistir los avistamientos sin necesidad de conexión a internet. El archivo de base de datos se crea automáticamente en el primer uso con el nombre `aves.db` en el directorio de bases de datos del dispositivo.
-
-El campo `sincronizado` permite la sincronización con Firebase Firestore: los registros marcados como `0` son los pendientes de subir a la nube.
-
----
-
-## 🤖 Modelo de IA
-
-| Parámetro | Valor |
-|---|---|
-| Framework | TensorFlow Lite |
-| Archivo | `model_aves.tflite` |
-| Tamaño de entrada | 380 × 380 × 3 (RGB) |
-| Clases de salida | 16 |
-| Normalización | Valores en rango [0.0, 1.0] |
-| Tipo de tarea | Clasificación multiclase |
-
-El modelo fue entrenado con imágenes de las 16 especies listadas. La inferencia se ejecuta **completamente en el dispositivo** (on-device), por lo que **no requiere conexión a internet** para clasificar.
-
----
-
-## 📦 Dependencias
-
-| Paquete | Versión | Uso |
-|---|---|---|
-| `camera` | ^0.12.0+1 | Captura de fotos en tiempo real |
-| `image_picker` | ^1.2.1 | Selección desde galería |
-| `tflite_flutter` | ^0.12.1 | Inferencia con modelo TFLite |
-| `image` | ^4.1.7 | Procesamiento y redimensionado de imágenes |
-| `geolocator` | ^14.0.2 | GPS y geolocalización |
-| `google_maps_flutter` | ^2.17.0 | Mapas interactivos |
-| `sqflite` | ^2.4.2 | Base de datos SQLite local |
-| `uuid` | ^4.5.3 | Generación de IDs únicos (UUID v4) |
-| `path_provider` | ^2.1.5 | Acceso a rutas del sistema de archivos |
-| `path` | ^1.9.1 | Manipulación de rutas |
-| `url_launcher` | ^6.3.1 | Apertura de URLs externas |
-| `firebase_core` | ^3.6.0 | Inicialización de Firebase |
-| `cloud_firestore` | ^5.4.4 | Base de datos en la nube (RF09) |
-| `connectivity_plus` | ^6.0.3 | Detección de conectividad a internet |
-| `cupertino_icons` | ^1.0.8 | Iconos estilo iOS |
-
----
-
-## 🖥️ Plataformas Soportadas
-
-| Plataforma | Estado |
-|---|---|
-| Android | ✅ Soportada (principal) |
-| iOS | ✅ Soportada |
-| Web | ⚠️ Parcial (cámara/GPS limitados) |
-| Windows | ⚠️ Parcial (cámara/GPS limitados) |
-| Linux | ⚠️ Parcial |
-| macOS | ⚠️ Parcial |
-
-> La experiencia completa (cámara, GPS, TFLite) está optimizada para **Android e iOS**.
-
----
-
-## 🤝 Contribuir
-
-1. Haz fork del repositorio
-2. Crea una rama para tu feature: `git checkout -b feature/nueva-funcionalidad`
-3. Realiza tus cambios y haz commit: `git commit -m "feat: descripción del cambio"`
-4. Sube los cambios: `git push origin feature/nueva-funcionalidad`
-5. Abre un **Pull Request** describiendo los cambios
-
----
-
-<p align="center">
-  Desarrollado con ❤️ y Flutter por <strong>Santiago Lopez</strong> y <strong>Sebastian Castro</strong> — 2025
-</p>
+Proyecto académico — Universidad del Tolima  
+Todos los derechos reservados © 2025 Santiago Lopez, Sebastian Castro
