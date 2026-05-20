@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aves_app/Services/classifier_service.dart';
 import 'package:aves_app/Services/database_service.dart';
+import 'package:aves_app/Services/firestore_service.dart';
 import 'package:aves_app/Services/location_service.dart';
 import 'package:aves_app/Presentation/UI/DistribucionAveScreen.dart';
 
@@ -43,17 +44,16 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
   void initState() {
     super.initState();
     _loadModels();
+    // Al abrir la pantalla, sincronizar pendientes si hay internet
+    FirestoreService.sincronizarPendientes();
   }
 
   Future<void> _loadModels() async {
-    // Modelo original (prioritario)
     _classifierOriginal.loadModel().then((_) {
       if (mounted) setState(() => _modeloOriginalListo = true);
     }).catchError((_) {
       if (mounted) setState(() => _modeloOriginalError = true);
     });
-
-    // BirdNET en paralelo
     _classifierBirdNet.loadModel().then((_) {
       if (mounted) setState(() => _modeloBirdNetListo = true);
     }).catchError((e) {
@@ -105,9 +105,9 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     }
     setState(() => _isLoading = true);
     try {
-      final result     = await _clasificar(_image!);
-      final top3       = result['top3'] as List<Map<String, dynamic>>;
-      final topConf    = top3.first['confidence'] as double;
+      final result  = await _clasificar(_image!);
+      final top3    = result['top3'] as List<Map<String, dynamic>>;
+      final topConf = top3.first['confidence'] as double;
       if (topConf < _umbralConfianza) {
         setState(() { _result = null; _noEsAve = true; _isLoading = false; });
       } else {
@@ -122,25 +122,46 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
   Future<void> _guardarAvistamiento() async {
     if (_result == null || _image == null) return;
     setState(() => _isSaving = true);
+
     try {
       final position = await LocationService.getCurrentPosition();
       final lat = position?.latitude  ?? 0.0;
       final lng = position?.longitude ?? 0.0;
-      final top3 = _result!['top3'] as List<Map<String, dynamic>>;
-      await DatabaseService.guardarAvistamiento(
-        especie:   top3.first['label'].toString(),
-        confianza: top3.first['confidence'] as double,
+      final top3    = _result!['top3'] as List<Map<String, dynamic>>;
+      final especie  = top3.first['label'].toString();
+      final confianza = top3.first['confidence'] as double;
+
+      // 1️⃣ Siempre guardar en SQLite local primero
+      final id = await DatabaseService.guardarAvistamiento(
+        especie:   especie,
+        confianza: confianza,
         fotoPath:  _image!.path,
         latitud:   lat,
         longitud:  lng,
       );
+
+      // 2️⃣ Intentar subir a Firebase si hay internet
+      final tieneInternet = await FirestoreService.hayInternet();
+      String mensajeExtra = '';
+
+      if (tieneInternet) {
+        // Obtener el avistamiento recién creado para subirlo
+        final todos = await DatabaseService.obtenerTodos();
+        final avistamiento = todos.firstWhere((a) => a.id == id);
+        final subido = await FirestoreService.sincronizarAvistamiento(avistamiento);
+        mensajeExtra = subido ? ' ☁️ Firebase ✓' : ' (Firebase falló)';
+      } else {
+        mensajeExtra = ' 📵 Sin internet, guardado solo local';
+      }
+
       setState(() => _isSaving = false);
       _showSnack(
         position != null
-            ? '\u2713 Guardado: ${top3.first['label']}'
-            : '\u2713 Guardado sin GPS',
-        _green,
+            ? '✓ Guardado: $especie$mensajeExtra'
+            : '✓ Guardado sin GPS$mensajeExtra',
+        tieneInternet ? _green : Colors.orange,
       );
+
     } catch (e) {
       setState(() => _isSaving = false);
       _showSnack('Error al guardar: $e', Colors.red);
@@ -172,7 +193,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     super.dispose();
   }
 
-  // ─── UI ──────────────────────────────────────────────────────────
+  // ── UI ──────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -188,12 +209,8 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-
-            // ── Selector de modelo ──────────────────────────────────
             _buildModelSelector(),
             const SizedBox(height: 16),
-
-            // ── Imagen ─────────────────────────────────────────────
             GestureDetector(
               onTap: () => _pickImage(ImageSource.gallery),
               child: ClipRRect(
@@ -210,38 +227,28 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
                         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                           Icon(Icons.add_photo_alternate_outlined, size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 8),
-                          Text('Toca para seleccionar una foto', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                          Text('Toca para seleccionar una foto',
+                              style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
                         ]),
                       ),
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── Botones c\u00e1mara / galer\u00eda ─────────────────────────────
             Row(children: [
               Expanded(child: _actionBtn(
-                icon: Icons.camera_alt_rounded,
-                label: 'C\u00c1MARA',
-                color: _green,
+                icon: Icons.camera_alt_rounded, label: 'C\u00c1MARA', color: _green,
                 onTap: _isLoading ? null : () => _pickImage(ImageSource.camera),
               )),
               const SizedBox(width: 10),
               Expanded(child: _actionBtn(
-                icon: Icons.photo_library_rounded,
-                label: 'GALER\u00cdA',
-                color: _dark,
+                icon: Icons.photo_library_rounded, label: 'GALER\u00cdA', color: _dark,
                 onTap: _isLoading ? null : () => _pickImage(ImageSource.gallery),
               )),
             ]),
             const SizedBox(height: 16),
-
-            // ── Resultado ──────────────────────────────────────────
-            if (_isLoading)
-              _buildLoading()
-            else if (_noEsAve)
-              _buildNoEsAve()
+            if (_isLoading)       _buildLoading()
+            else if (_noEsAve)    _buildNoEsAve()
             else if (_result != null) ..._buildResults(),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -249,39 +256,28 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     );
   }
 
-  // ── Selector de modelo ────────────────────────────────────────────
   Widget _buildModelSelector() {
     return Row(children: [
       Expanded(child: _modeloChip(
-        label: 'Modelo Original',
-        sub: '16 aves del Tolima',
+        label: 'Modelo Original', sub: '16 aves del Tolima',
         activo: _modeloSeleccionado == ModeloAves.original,
-        listo: _modeloOriginalListo,
-        error: _modeloOriginalError,
-        color: _green,
+        listo: _modeloOriginalListo, error: _modeloOriginalError, color: _green,
         onTap: () => _cambiarModelo(ModeloAves.original),
       )),
       const SizedBox(width: 10),
       Expanded(child: _modeloChip(
-        label: 'BirdNET',
-        sub: 'Tolima 16 aves',
+        label: 'BirdNET', sub: 'Tolima 16 aves',
         activo: _modeloSeleccionado == ModeloAves.birdnet,
-        listo: _modeloBirdNetListo,
-        error: false,
-        color: _blue,
+        listo: _modeloBirdNetListo, error: false, color: _blue,
         onTap: () => _cambiarModelo(ModeloAves.birdnet),
       )),
     ]);
   }
 
   Widget _modeloChip({
-    required String label,
-    required String sub,
-    required bool activo,
-    required bool listo,
-    required bool error,
-    required Color color,
-    required VoidCallback onTap,
+    required String label, required String sub,
+    required bool activo, required bool listo, required bool error,
+    required Color color, required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: error ? () => _showSnack('Modelo no disponible.', Colors.orange) : onTap,
@@ -295,22 +291,22 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
             color: error ? Colors.grey.shade300 : activo ? color : Colors.grey.shade300,
             width: activo ? 2 : 1,
           ),
-          boxShadow: activo ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))] : [],
+          boxShadow: activo
+              ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))]
+              : [],
         ),
         child: Row(children: [
           Icon(
             error ? Icons.block : activo ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-            color: error ? Colors.grey.shade400 : color,
-            size: 20,
+            color: error ? Colors.grey.shade400 : color, size: 20,
           ),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: TextStyle(
-                  fontWeight: activo ? FontWeight.bold : FontWeight.w500,
-                  color: error ? Colors.grey.shade400 : activo ? color : _dark,
-                  fontSize: 13,
-                )),
+            Text(label, style: TextStyle(
+              fontWeight: activo ? FontWeight.bold : FontWeight.w500,
+              color: error ? Colors.grey.shade400 : activo ? color : _dark,
+              fontSize: 13,
+            )),
             Text(error ? 'No disponible' : sub,
                 style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
           ])),
@@ -324,15 +320,13 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     );
   }
 
-  // ── Botones de acci\u00f3n ─────────────────────────────────────────────
   Widget _actionBtn({required IconData icon, required String label, required Color color, VoidCallback? onTap}) {
     return ElevatedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 20),
       label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
       style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
+        backgroundColor: color, foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
@@ -340,29 +334,29 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     );
   }
 
-  // ── Loading ────────────────────────────────────────────────────────
   Widget _buildLoading() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Column(children: [
-        CircularProgressIndicator(color: _modeloSeleccionado == ModeloAves.original ? _green : _blue),
+        CircularProgressIndicator(
+            color: _modeloSeleccionado == ModeloAves.original ? _green : _blue),
         const SizedBox(height: 12),
         Text(
-          _modeloSeleccionado == ModeloAves.original ? 'Analizando con Modelo Original...' : 'Analizando con BirdNET...',
+          _modeloSeleccionado == ModeloAves.original
+              ? 'Analizando con Modelo Original...'
+              : 'Analizando con BirdNET...',
           style: TextStyle(color: _dark, fontSize: 13),
         ),
       ]),
     );
   }
 
-  // ── No es ave ──────────────────────────────────────────────────────
   Widget _buildNoEsAve() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.red.shade50, borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.red.shade200),
       ),
       child: Column(children: [
@@ -372,7 +366,7 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
             style: TextStyle(color: Colors.red.shade700, fontSize: 17, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         Text(
-          'La imagen no coincide con ninguna de las 16 especies del modelo activo.\nIntenta con mejor iluminaci\u00f3n o m\u00e1s cerca del ave.',
+          'La imagen no coincide con ninguna de las 16 especies.\nIntenta con mejor iluminaci\u00f3n o m\u00e1s cerca del ave.',
           style: TextStyle(color: Colors.red.shade500, fontSize: 12),
           textAlign: TextAlign.center,
         ),
@@ -380,152 +374,127 @@ class _IdentificarAveScreenState extends State<IdentificarAveScreen>
     );
   }
 
-  // ── Resultados ─────────────────────────────────────────────────────
   List<Widget> _buildResults() {
-    final top3      = _result!['top3'] as List<Map<String, dynamic>>;
-    final topResult = top3.first;
-    final refImage  = topResult['referenceImage'] as String;
+    final top3       = _result!['top3'] as List<Map<String, dynamic>>;
+    final topResult  = top3.first;
+    final refImage   = topResult['referenceImage'] as String;
     final activeColor = _modeloSeleccionado == ModeloAves.original ? _green : _blue;
 
     return [
-      // Card principal
       Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white, borderRadius: BorderRadius.circular(16),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header con badge de modelo
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-              decoration: BoxDecoration(
-                color: activeColor.withOpacity(0.1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Especie detectada',
-                    style: TextStyle(color: activeColor, fontWeight: FontWeight.bold, fontSize: 13)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: activeColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _modeloSeleccionado == ModeloAves.original ? '\ud83e\uddea Original' : '\ud83c\udf0e BirdNET',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            decoration: BoxDecoration(
+              color: activeColor.withOpacity(0.1),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Especie detectada',
+                  style: TextStyle(color: activeColor, fontWeight: FontWeight.bold, fontSize: 13)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(color: activeColor, borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  _modeloSeleccionado == ModeloAves.original ? '\ud83e\uddea Original' : '\ud83c\udf0e BirdNET',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Expanded(child: Column(children: [
+                Text('Tu foto', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 6),
+                ClipRRect(borderRadius: BorderRadius.circular(10),
+                    child: Image.file(_image!, height: 120, fit: BoxFit.cover)),
+              ])),
+              const SizedBox(width: 12),
+              Expanded(child: Column(children: [
+                Text('Referencia', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 6),
+                ClipRRect(borderRadius: BorderRadius.circular(10),
+                    child: refImage.isNotEmpty
+                        ? Image.asset(refImage, height: 120, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _noRefImage())
+                        : _noRefImage()),
+              ])),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Column(children: [
+              Text(topResult['label'].toString().toUpperCase(),
+                  style: TextStyle(color: activeColor, fontSize: 17, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.bar_chart_rounded, color: activeColor, size: 18),
+                const SizedBox(width: 4),
+                Text('Confianza: ${topResult['confidenceText']}',
+                    style: TextStyle(color: _dark, fontSize: 14, fontWeight: FontWeight.w500)),
               ]),
-            ),
-            // Fotos
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(children: [
-                Expanded(child: Column(children: [
-                  Text('Tu foto', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                  const SizedBox(height: 6),
-                  ClipRRect(borderRadius: BorderRadius.circular(10),
-                      child: Image.file(_image!, height: 120, fit: BoxFit.cover)),
-                ])),
-                const SizedBox(width: 12),
-                Expanded(child: Column(children: [
-                  Text('Referencia', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                  const SizedBox(height: 6),
-                  ClipRRect(borderRadius: BorderRadius.circular(10),
-                      child: refImage.isNotEmpty
-                          ? Image.asset(refImage, height: 120, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _noRefImage())
-                          : _noRefImage()),
-                ])),
-              ]),
-            ),
-            // Nombre y confianza
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Column(children: [
-                Text(topResult['label'].toString().toUpperCase(),
-                    style: TextStyle(color: activeColor, fontSize: 17, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 4),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.bar_chart_rounded, color: activeColor, size: 18),
-                  const SizedBox(width: 4),
-                  Text('Confianza: ${topResult['confidenceText']}',
-                      style: TextStyle(color: _dark, fontSize: 14, fontWeight: FontWeight.w500)),
-                ]),
-              ]),
-            ),
-          ],
-        ),
+            ]),
+          ),
+        ]),
       ),
       const SizedBox(height: 12),
-
-      // Top 3 ranking
       Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white, borderRadius: BorderRadius.circular(16),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Top 3 probabilidades',
-                style: TextStyle(color: _dark, fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 10),
-            ...List.generate(top3.length, (i) {
-              final item = top3[i];
-              final conf = item['confidence'] as double;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(children: [
-                  CircleAvatar(
-                    radius: 13,
-                    backgroundColor: i == 0 ? activeColor : Colors.grey.shade300,
-                    child: Text('${i + 1}',
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item['label'].toString(),
-                          style: TextStyle(
-                              fontWeight: i == 0 ? FontWeight.bold : FontWeight.normal,
-                              fontSize: 12, color: _dark)),
-                      const SizedBox(height: 3),
-                      LinearProgressIndicator(
-                        value: conf,
-                        backgroundColor: Colors.grey.shade200,
-                        color: i == 0 ? activeColor : Colors.grey.shade400,
-                        minHeight: 5,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  )),
-                  const SizedBox(width: 8),
-                  Text(item['confidenceText'].toString(),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Top 3 probabilidades',
+              style: TextStyle(color: _dark, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 10),
+          ...List.generate(top3.length, (i) {
+            final item = top3[i];
+            final conf = item['confidence'] as double;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: i == 0 ? activeColor : Colors.grey.shade300,
+                  child: Text('${i+1}',
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(item['label'].toString(),
                       style: TextStyle(
-                          color: i == 0 ? activeColor : Colors.grey.shade500,
-                          fontWeight: FontWeight.bold, fontSize: 12)),
-                ]),
-              );
-            }),
-          ],
-        ),
+                          fontWeight: i == 0 ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12, color: _dark)),
+                  const SizedBox(height: 3),
+                  LinearProgressIndicator(
+                    value: conf,
+                    backgroundColor: Colors.grey.shade200,
+                    color: i == 0 ? activeColor : Colors.grey.shade400,
+                    minHeight: 5,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ])),
+                const SizedBox(width: 8),
+                Text(item['confidenceText'].toString(),
+                    style: TextStyle(
+                        color: i == 0 ? activeColor : Colors.grey.shade500,
+                        fontWeight: FontWeight.bold, fontSize: 12)),
+              ]),
+            );
+          }),
+        ]),
       ),
       const SizedBox(height: 12),
-
-      // Botones de acci\u00f3n post-resultado
       _actionBtn(
-        icon: Icons.map_outlined,
-        label: 'VER D\u00d3NDE ENCONTRARLA',
-        color: _blue,
+        icon: Icons.map_outlined, label: 'VER D\u00d3NDE ENCONTRARLA', color: _blue,
         onTap: _verDistribucion,
       ),
       const SizedBox(height: 8),
