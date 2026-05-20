@@ -360,4 +360,4 @@ connectivity_plus: ^6.0.3     # Estado de conexión
 ## 📄 Licencia
 
 Proyecto académico — Universidad del Tolima  
-Todos los derechos reservados © 2025 Santiago Lopez, Sebastian Castro
+Todos los derechos reservados © 2026 Santiago Lopez, Sebastian Castro
