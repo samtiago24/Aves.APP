@@ -6,27 +6,19 @@ import 'dart:io';
 
 enum ModeloAves { original, birdnet }
 
+// ─────────────────────────────────────────────────────────────────
+// MODELO ORIGINAL — 16 especies (model_aves.tflite)
+// ─────────────────────────────────────────────────────────────────
 class BirdClassifier {
   Interpreter? _interpreter;
   bool _isLoaded = false;
 
   static const List<String> labels = [
-    'Avefría teroCSV',
-    'Baltimore Oriole',
-    'Bienteveo Común',
-    'Canario coronado',
-    'Colibrí Cola Canela',
-    'Fiofiío Silbón',
-    'Garza dedos dorados',
-    'Jacana',
-    'Luis Pico Grueso',
-    'Papamoscas rayado chico',
-    'Saltador Gris',
-    'Saltador garganta ocre',
-    'Tangara Azulgris',
-    'Torcaza Colorada',
-    'Vireo Ojos Rojos',
-    'Zorzal sabia',
+    'Avefría teroCSV', 'Baltimore Oriole', 'Bienteveo Común',
+    'Canario coronado', 'Colibrí Cola Canela', 'Fiofiío Silbón',
+    'Garza dedos dorados', 'Jacana', 'Luis Pico Grueso',
+    'Papamoscas rayado chico', 'Saltador Gris', 'Saltador garganta ocre',
+    'Tangara Azulgris', 'Torcaza Colorada', 'Vireo Ojos Rojos', 'Zorzal sabia',
   ];
 
   static const Map<String, String> referenceImages = {
@@ -51,10 +43,9 @@ class BirdClassifier {
   Future<void> loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset('lib/assets/models/model_aves.tflite');
+      _interpreter!.allocateTensors();
       _isLoaded = true;
-      print('[ORIGINAL] ✓ Modelo cargado.');
-      print('[ORIGINAL]    Input : ${_interpreter!.getInputTensor(0).shape}');
-      print('[ORIGINAL]    Output: ${_interpreter!.getOutputTensor(0).shape}');
+      print('[ORIGINAL] ✓ Modelo cargado. Input:${_interpreter!.getInputTensor(0).shape} Output:${_interpreter!.getOutputTensor(0).shape}');
     } catch (e) {
       _isLoaded = false;
       print('[ORIGINAL] ✗ Error: $e');
@@ -64,50 +55,55 @@ class BirdClassifier {
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
     if (!_isLoaded || _interpreter == null) throw Exception('Modelo original no cargado.');
-    final raw = img.decodeImage(await imageFile.readAsBytes())!;
+    final raw     = img.decodeImage(await imageFile.readAsBytes())!;
     final resized = img.copyResize(raw, width: 380, height: 380);
-    final input = List.generate(1, (_) => List.generate(380, (y) => List.generate(380, (x) {
+    final input   = List.generate(1, (_) => List.generate(380, (y) => List.generate(380, (x) {
       final p = resized.getPixel(x, y);
       return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
     })));
     final output = List.filled(labels.length, 0.0).reshape([1, labels.length]);
     _interpreter!.run(input, output);
-    final scores = List<double>.from(output[0] as List);
+    final scores  = List<double>.from(output[0] as List);
     final indexed = List.generate(scores.length, (i) => i)..sort((a, b) => scores[b].compareTo(scores[a]));
-    final topIdx = indexed[0];
-    final top3 = indexed.take(3).map((i) => {
-      'label': labels[i],
-      'confidence': scores[i],
-      'confidenceText': '${(scores[i] * 100).toStringAsFixed(1)}%',
+    final topIdx  = indexed[0];
+    final top3    = indexed.take(3).map((i) => {
+      'label': labels[i], 'confidence': scores[i],
+      'confidenceText': '${(scores[i]*100).toStringAsFixed(1)}%',
       'referenceImage': referenceImages[labels[i]] ?? '',
     }).toList();
     return {
-      'label': labels[topIdx],
-      'confidence': scores[topIdx],
-      'confidenceText': '${(scores[topIdx] * 100).toStringAsFixed(1)}%',
+      'label': labels[topIdx], 'confidence': scores[topIdx],
+      'confidenceText': '${(scores[topIdx]*100).toStringAsFixed(1)}%',
       'referenceImage': referenceImages[labels[topIdx]] ?? '',
-      'top3': top3,
-      'allScores': scores,
+      'top3': top3, 'allScores': scores,
     };
   }
 
   void dispose() => _interpreter?.close();
 }
 
+// ─────────────────────────────────────────────────────────────────
+// MODELO BIRDNET — 6K Global
+// Input : [1, 144000] float32
+// Output: [1, 6362]   float32
+// FIX: allocateTensors() es OBLIGATORIO antes de run() para modelos
+//      que usan SignatureDef o que el intérprete no aloca automático.
+//      Sin él, quiver/check.dart:74 lanza "Bad state: failed precondition".
+// ─────────────────────────────────────────────────────────────────
 class BirdNetClassifier {
   Interpreter? _interpreter;
   bool _isLoaded = false;
 
-  static const int _inputSize = 144000;
+  static const int _inputSize  = 144000;
   static const int _numClasses = 6362;
-  static const int _side = 379;
+  static const int _side       = 379; // 379x379=143641 + 359 padding
 
-  String infoInput = '';
+  String infoInput  = '';
   String infoOutput = '';
-  String infoTop3 = '';
-  String infoError = '';
-  String infoStack = '';
-  String infoDebug = '';
+  String infoTop3   = '';
+  String infoError  = '';
+  String infoStack  = '';
+  String infoDebug  = '';
   String infoShapes = '';
 
   static const List<String> _tolimalabels = [
@@ -130,38 +126,42 @@ class BirdNetClassifier {
   ];
 
   static const Map<String, String> referenceImages = {
-    'Aburria aburri_Wattled Guan': 'lib/assets/images/aburria_aburri.jpg',
-    'Accipiter bicolor_Bicolored Hawk': 'lib/assets/images/accipiter_bicolor.jpg',
+    'Aburria aburri_Wattled Guan':                'lib/assets/images/aburria_aburri.jpg',
+    'Accipiter bicolor_Bicolored Hawk':           'lib/assets/images/accipiter_bicolor.jpg',
     'Adelomyia melanogenys_Speckled Hummingbird': 'lib/assets/images/adelomyia_melanogenys.jpg',
-    'Agelaioides badius_Grayish Baywing': 'lib/assets/images/agelaioides_badius.jpg',
-    'Agelaius phoeniceus_Red-winged Blackbird': 'lib/assets/images/agelaius_phoeniceus.jpg',
-    'Aglaiocercus kingii_Long-tailed Sylph': 'lib/assets/images/aglaiocercus_kingii.jpg',
-    'Actitis macularius_Spotted Sandpiper': 'lib/assets/images/actitis_macularius.jpg',
-    'Aegolius harrisii_Buff-fronted Owl': 'lib/assets/images/aegolius_harrisii.jpg',
-    'Aeronautes montivagus_White-tipped Swift': 'lib/assets/images/aeronautes_montivagus.jpg',
-    'Accipiter striatus_Sharp-shinned Hawk': 'lib/assets/images/accipiter_striatus.jpg',
-    'Acropternis orthonyx_Ocellated Tapaculo': 'lib/assets/images/acropternis_orthonyx.jpg',
-    'Accipiter superciliosus_Tiny Hawk': 'lib/assets/images/accipiter_superciliosus.jpg',
+    'Agelaioides badius_Grayish Baywing':         'lib/assets/images/agelaioides_badius.jpg',
+    'Agelaius phoeniceus_Red-winged Blackbird':   'lib/assets/images/agelaius_phoeniceus.jpg',
+    'Aglaiocercus kingii_Long-tailed Sylph':      'lib/assets/images/aglaiocercus_kingii.jpg',
+    'Actitis macularius_Spotted Sandpiper':       'lib/assets/images/actitis_macularius.jpg',
+    'Aegolius harrisii_Buff-fronted Owl':         'lib/assets/images/aegolius_harrisii.jpg',
+    'Aeronautes montivagus_White-tipped Swift':   'lib/assets/images/aeronautes_montivagus.jpg',
+    'Accipiter striatus_Sharp-shinned Hawk':      'lib/assets/images/accipiter_striatus.jpg',
+    'Acropternis orthonyx_Ocellated Tapaculo':    'lib/assets/images/acropternis_orthonyx.jpg',
+    'Accipiter superciliosus_Tiny Hawk':          'lib/assets/images/accipiter_superciliosus.jpg',
     'Aglaiocercus coelestis_Violet-tailed Sylph': 'lib/assets/images/aglaiocercus_coelestis.jpg',
-    'Accipiter erythronemius_Rufous-thighed Hawk': 'lib/assets/images/accipiter_erythronemius.jpg',
-    'Accipiter poliogaster_Gray-bellied Hawk': 'lib/assets/images/accipiter_poliogaster.jpg',
-    'Acanthidops bairdi_Peg-billed Finch': 'lib/assets/images/acanthidops_bairdi.jpg',
+    'Accipiter erythronemius_Rufous-thighed Hawk':'lib/assets/images/accipiter_erythronemius.jpg',
+    'Accipiter poliogaster_Gray-bellied Hawk':    'lib/assets/images/accipiter_poliogaster.jpg',
+    'Acanthidops bairdi_Peg-billed Finch':        'lib/assets/images/acanthidops_bairdi.jpg',
   };
 
   Future<void> loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset('lib/assets/models/BirdNET_6K_GLOBAL_MODEL.tflite');
-      final inputTensor = _interpreter!.getInputTensor(0);
-      final outputTensor = _interpreter!.getOutputTensor(0);
-      final inShape = inputTensor.shape;
-      final outShape = outputTensor.shape;
+      _interpreter = await Interpreter.fromAsset(
+        'lib/assets/models/BirdNET_6K_GLOBAL_MODEL.tflite',
+      );
 
-      infoInput = 'Input : $inShape  dtype: ${inputTensor.type}';
-      infoOutput = 'Output: $outShape  dtype: ${outputTensor.type}';
+      // ★ FIX CLAVE: sin allocateTensors(), invoke() falla con
+      //   "Bad state: failed precondition" en quiver/check.dart:74
+      _interpreter!.allocateTensors();
+
+      final inShape  = _interpreter!.getInputTensor(0).shape;
+      final outShape = _interpreter!.getOutputTensor(0).shape;
+      infoInput  = 'Input : $inShape  dtype: ${_interpreter!.getInputTensor(0).type}';
+      infoOutput = 'Output: $outShape  dtype: ${_interpreter!.getOutputTensor(0).type}';
       infoShapes = 'rankIn=${inShape.length} rankOut=${outShape.length}';
-      infoDebug = 'loadModel ok';
+      infoDebug  = 'loadModel ok + allocateTensors ok';
 
-      print('[BIRDNET] ✓ Modelo cargado.');
+      print('[BIRDNET] ✓ Modelo cargado + tensores alocados.');
       print('[BIRDNET]    $infoInput');
       print('[BIRDNET]    $infoOutput');
       _isLoaded = true;
@@ -170,39 +170,34 @@ class BirdNetClassifier {
       infoError = '$e';
       infoStack = st.toString();
       infoDebug = 'falló loadModel';
-      print('[BIRDNET] ✗ Error loadModel: $e');
-      print('[BIRDNET]    $st');
+      print('[BIRDNET] ✗ Error loadModel: $e\n$st');
       rethrow;
     }
   }
 
   Future<Map<String, dynamic>> classify(File imageFile) async {
     if (!_isLoaded || _interpreter == null) {
-      infoError = 'Modelo BirdNET no cargado';
-      infoDebug = 'guard clause _isLoaded/interpreter';
+      infoError = 'Modelo no cargado';
       throw Exception('Modelo BirdNET no cargado.');
     }
-
-    infoError = '';
-    infoStack = '';
-    infoTop3 = '';
+    infoError = ''; infoStack = ''; infoTop3 = '';
     infoDebug = 'inicio classify';
 
     try {
       final bytes = await imageFile.readAsBytes();
-      infoDebug = 'bytes leídos=${bytes.length}';
+      infoDebug = 'bytes=${bytes.length}';
 
       final raw = img.decodeImage(bytes);
       if (raw == null) {
-        infoError = 'decodeImage devolvió null';
-        infoDebug = 'falló decodeImage';
+        infoError = 'decodeImage null';
         throw Exception('No se pudo decodificar la imagen.');
       }
-
       infoDebug = 'decode ok ${raw.width}x${raw.height}';
+
       final resized = img.copyResize(raw, width: _side, height: _side);
       infoDebug = 'resize ok ${resized.width}x${resized.height}';
 
+      // Construir vector plano igual que el modelo original
       final flat = List<double>.filled(_inputSize, 0.0);
       int idx = 0;
       for (int y = 0; y < _side; y++) {
@@ -212,16 +207,14 @@ class BirdNetClassifier {
         }
       }
 
-      final input = [flat];
+      final input  = [flat];  // [1, 144000]
       final output = List.filled(_numClasses, 0.0).reshape([1, _numClasses]);
 
-      infoDebug = 'antes de run | inputType=${input.runtimeType} flatType=${flat.runtimeType} outputType=${output.runtimeType} idx=$idx';
-      print('[BIRDNET] DEBUG: $infoDebug');
-      print('[BIRDNET] DEBUG input[0] len=${(input[0] as List).length}');
-      print('[BIRDNET] DEBUG output len=${(output[0] as List).length}');
+      infoDebug = 'antes de run | idx=$idx flatLen=${flat.length}';
+      print('[BIRDNET] $infoDebug');
 
       _interpreter!.run(input, output);
-      infoDebug = 'run ok';
+      infoDebug = 'run ok ✓';
       print('[BIRDNET] ✓ Inference OK');
 
       final allScores = List<double>.from(output[0] as List);
@@ -229,37 +222,35 @@ class BirdNetClassifier {
       final tolimaScores = <String, double>{
         for (int i = 0; i < n; i++) _tolimalabels[i]: allScores[i],
       };
-      final sorted = tolimaScores.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      final sorted = tolimaScores.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
 
       infoTop3 = sorted.take(3).toList().asMap().entries.map((e) =>
-        '${e.key + 1}. ${e.value.key}\n   → ${(e.value.value * 100).toStringAsFixed(2)}%'
+        '${e.key+1}. ${e.value.key}\n   → ${(e.value.value*100).toStringAsFixed(2)}%'
       ).join('\n');
       infoDebug = 'postproceso ok';
+      print('[BIRDNET]    Top 3:\n$infoTop3');
 
       final topLabel = sorted[0].key;
       final topScore = sorted[0].value;
       final top3 = sorted.take(3).map((e) => {
-        'label': e.key,
-        'confidence': e.value,
-        'confidenceText': '${(e.value * 100).toStringAsFixed(1)}%',
+        'label': e.key, 'confidence': e.value,
+        'confidenceText': '${(e.value*100).toStringAsFixed(1)}%',
         'referenceImage': referenceImages[e.key] ?? '',
       }).toList();
 
       return {
-        'label': topLabel,
-        'confidence': topScore,
-        'confidenceText': '${(topScore * 100).toStringAsFixed(1)}%',
+        'label': topLabel, 'confidence': topScore,
+        'confidenceText': '${(topScore*100).toStringAsFixed(1)}%',
         'referenceImage': referenceImages[topLabel] ?? '',
-        'top3': top3,
-        'allScores': allScores,
+        'top3': top3, 'allScores': allScores,
       };
+
     } catch (e, st) {
       infoError = '$e';
       infoStack = st.toString();
       infoDebug = 'catch classify | errorType=${e.runtimeType}';
-      print('[BIRDNET] ✗ Error en classify(): $e');
-      print('[BIRDNET] ✗ Tipo error: ${e.runtimeType}');
-      print('[BIRDNET] ✗ StackTrace: $st');
+      print('[BIRDNET] ✗ $e\n$st');
       rethrow;
     }
   }
