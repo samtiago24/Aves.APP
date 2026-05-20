@@ -1,7 +1,6 @@
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:io';
-import 'dart:typed_data';
 
 // Autores: Santiago Lopez, Sebastian Castro
 
@@ -9,6 +8,8 @@ enum ModeloAves { original, birdnet }
 
 // ─────────────────────────────────────────────────────────────────
 // MODELO ORIGINAL — 16 especies (model_aves.tflite)
+// Input : [1, 380, 380, 3]   ← lista anidada 4D
+// Output: [1, 16]
 // ─────────────────────────────────────────────────────────────────
 class BirdClassifier {
   Interpreter? _interpreter;
@@ -70,16 +71,19 @@ class BirdClassifier {
     if (!_isLoaded || _interpreter == null) throw Exception('Modelo original no cargado.');
     final raw     = img.decodeImage(await imageFile.readAsBytes())!;
     final resized = img.copyResize(raw, width: 380, height: 380);
-    final input   = List.generate(1, (_) => List.generate(380, (y) => List.generate(380, (x) {
-      final p = resized.getPixel(x, y);
-      return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
-    })));
+    final input   = List.generate(1, (_) =>
+      List.generate(380, (y) =>
+        List.generate(380, (x) {
+          final p = resized.getPixel(x, y);
+          return [p.r / 255.0, p.g / 255.0, p.b / 255.0];
+        })));
     final output = List.filled(labels.length, 0.0).reshape([1, labels.length]);
     _interpreter!.run(input, output);
     final scores  = List<double>.from(output[0] as List);
-    final indexed = List.generate(scores.length, (i) => i)..sort((a, b) => scores[b].compareTo(scores[a]));
-    final topIdx  = indexed[0];
-    final top3    = indexed.take(3).map((i) => {
+    final indexed = List.generate(scores.length, (i) => i)
+      ..sort((a, b) => scores[b].compareTo(scores[a]));
+    final topIdx = indexed[0];
+    final top3   = indexed.take(3).map((i) => {
       'label': labels[i], 'confidence': scores[i],
       'confidenceText': '${(scores[i]*100).toStringAsFixed(1)}%',
       'referenceImage': referenceImages[labels[i]] ?? '',
@@ -97,26 +101,17 @@ class BirdClassifier {
 
 // ─────────────────────────────────────────────────────────────────
 // MODELO BIRDNET — 16 especies Tolima
-//
-// Shapes REALES confirmados (diagnóstico en dispositivo):
-//   Input : [1, 144000]  float32
-//   Output: [1, 6362]    float32
-//
-// CLAVE: TFLite en Flutter requiere Float32List (dart:typed_data)
-// para tensores flat. Usar List<double> causa "failed precondition"
-// porque el runtime no puede mapear el tipo de Dart al buffer nativo.
+// Input : [1, 144000]   float32  ← mismo patrón que modelo original
+// Output: [1, 6362]     float32
 // ─────────────────────────────────────────────────────────────────
 class BirdNetClassifier {
   Interpreter? _interpreter;
   bool _isLoaded = false;
 
-  // Shapes reales del dispositivo
   static const int _inputSize  = 144000;
   static const int _numClasses = 6362;
-  // 379 x 379 = 143641 px → los 359 restantes quedan en 0.0
-  static const int _side = 379;
+  static const int _side       = 379; // 379x379=143641 + 359 padding
 
-  // Info de diagnóstico expuesta a la UI
   String infoInput  = '';
   String infoOutput = '';
   String infoTop3   = '';
@@ -190,37 +185,32 @@ class BirdNetClassifier {
     try {
       final raw     = img.decodeImage(await imageFile.readAsBytes())!;
       final resized = img.copyResize(raw, width: _side, height: _side);
-      print('[BIRDNET]    Imagen: ${raw.width}x${raw.height} → ${_side}x${_side} grayscale');
+      print('[BIRDNET]    Imagen: ${raw.width}x${raw.height} → ${_side}x${_side}');
 
-      // ── Construir Float32List nativo [144000] ───────────────────────
-      // Float32List es el único tipo que TFLite acepta para tensores flat.
-      // List<double> de Dart causa "failed precondition" en el runtime nativo.
-      final inputBuffer = Float32List(_inputSize); // inicializado en 0.0
+      // ── Input [1, 144000] — mismo patrón que modelo original ──────────
+      // Lista anidada List<List<double>> con reshape igual que BirdClassifier.
+      // Los píxeles se aplanan en escala de grises y se padía con 0.0
+      // hasta llegar a exactamente 144000 valores.
+      final flat = List<double>.filled(_inputSize, 0.0);
       int idx = 0;
       for (int y = 0; y < _side; y++) {
         for (int x = 0; x < _side; x++) {
           final p = resized.getPixel(x, y);
-          inputBuffer[idx++] =
-              (p.r * 0.299 + p.g * 0.587 + p.b * 0.114) / 255.0;
+          flat[idx++] = (p.r * 0.299 + p.g * 0.587 + p.b * 0.114) / 255.0;
         }
       }
-      // idx == 143641; los 359 valores restantes quedan en 0.0 (padding)
+      // Igual que el modelo original: input = [ [v0, v1, ..., v143999] ]
+      final input  = [flat];                                          // shape [1, 144000]
+      final output = List.filled(_numClasses, 0.0).reshape([1, _numClasses]); // shape [1, 6362]
 
-      // Output también como Float32List
-      final outputBuffer = Float32List(_numClasses);
-
-      // runForMultipleInputs acepta ByteBuffer directamente → sin wrapped list
-      final inputs  = [inputBuffer.buffer];
-      final outputs = {0: outputBuffer.buffer};
-
-      print('[BIRDNET]    Ejecutando inference (Float32List)...');
-      _interpreter!.runForMultipleInputs(inputs, outputs);
+      print('[BIRDNET]    Ejecutando inference...');
+      _interpreter!.run(input, output);   // ← mismo run() que el modelo original
       print('[BIRDNET]    ✓ Inference OK');
 
-      // Mapear a etiquetas Tolima
-      final n = _tolimalabels.length.clamp(0, _numClasses);
+      final allScores = List<double>.from(output[0] as List);
+      final n = _tolimalabels.length.clamp(0, allScores.length);
       final tolimaScores = <String, double>{
-        for (int i = 0; i < n; i++) _tolimalabels[i]: outputBuffer[i],
+        for (int i = 0; i < n; i++) _tolimalabels[i]: allScores[i],
       };
       final sorted = tolimaScores.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
@@ -245,7 +235,7 @@ class BirdNetClassifier {
         'confidenceText': '${(topScore * 100).toStringAsFixed(1)}%',
         'referenceImage': referenceImages[topLabel] ?? '',
         'top3':           top3,
-        'allScores':      outputBuffer,
+        'allScores':      allScores,
       };
 
     } catch (e, st) {
